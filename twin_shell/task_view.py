@@ -21,7 +21,8 @@ def clean_text(value: str, limit: int = 180) -> str:
     text = re.sub(r"<source_thread_id>[\s\S]*?</source_thread_id>", "", text)
     text = re.sub(r"</?(?:codex_delegation|input)>", "", text)
     text = re.sub(r"!?\[([^\]]+)\]\([^\n)]+\)", r"\1", text)
-    text = re.sub(r"(?:https?://|/Users/|/var/|/tmp/)[^\s，。；）)]+", "[本机引用]", text)
+    text = re.sub(r"(?:[A-Za-z]:[\\/]|\\\\)[^\r\n，。；）)]+", "[本机引用]", text)
+    text = re.sub(r"(?:https?://|/Users/|/home/|/var/|/tmp/)[^\s，。；）)]+", "[本机引用]", text)
     text = re.sub(r"(?:sk-[A-Za-z0-9_-]{12,}|Bearer\s+\S+)", "[已隐藏]", text)
     text = re.sub(r"[#*`<>]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
@@ -43,7 +44,7 @@ def category_for(text: str, cwd: str) -> tuple[str, str]:
         return "course", "课程 / 文档"
     if re.search(r"自媒体|口播|视频|作品集|表情包|贴纸|宣传|剪辑", text + cwd):
         return "content", "内容 / 创作"
-    if re.search(r"/工作/|智慧芽|市场调研|竞品|专利", text + cwd):
+    if re.search(r"[/\\]工作[/\\]|市场调研|竞品|专利", text + cwd):
         return "work", "工作 / 研究"
     if re.search(r"软件|开发|代码|构建|bug|app|skill|插件|小程序|产品", text, re.I):
         return "product", "产品 / 开发"

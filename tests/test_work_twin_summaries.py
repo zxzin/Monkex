@@ -16,6 +16,12 @@ def context(text="修订住房报告中的五个角色诉求"):
 
 
 class SummaryTests(unittest.TestCase):
+    def test_windows_paths_are_redacted_before_ai_context(self):
+        for path in [r"C:\Users\Demo Person\private.txt", r"\\server\private\report.txt"]:
+            payload = context_for({"name": path, "preview": path}, [turn(text=path)])
+            self.assertNotIn("private", json.dumps(payload))
+            self.assertNotIn("Demo Person", json.dumps(payload))
+
     def test_context_keeps_recent_intent_and_evidence(self):
         turns = [turn(tid=str(i), text=f"具体阶段{i}") for i in range(9)]
         turns[-1]["items"][0]["content"][0]["text"] = "改为模拟语境"
