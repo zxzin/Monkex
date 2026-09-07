@@ -141,6 +141,18 @@ class ActivityTests(unittest.TestCase):
         self.assertIn("尚未验收", card["stage"])
         self.assertFalse(card["can_send"])
 
+    def test_feed_and_cached_details_only_read_existing_codex_content(self):
+        for _ in range(2):
+            result = self.shell.list_threads()
+            detail = self.shell.feed.detail("thread-0")
+            self.assertTrue(result["threads"])
+            self.assertEqual("检查这个应用的界面和按钮", detail["card"]["summary"])
+        self.assertFalse(hasattr(self.shell, "summaries"))
+        self.assertTrue(self.client.calls)
+        self.assertLessEqual({method for method, _ in self.client.calls},
+                             {"thread/list", "thread/read", "thread/turns/list"})
+        self.assertIsNone(importlib.util.find_spec("twin_shell.semantic_summary"))
+
     def test_feed_syncs_codex_receipt_through_cached_rows(self):
         from twin_shell.read_receipts import CodexReadReceipts
         self.shell.codex_read_receipts = CodexReadReceipts(self.root)

@@ -133,24 +133,19 @@ function updateTaskRow(button,card) {
   button.setAttribute("aria-pressed",String(card.id===state.selectedThreadId));
   button.setAttribute("aria-busy",String(card.id===state.openingId));
   button.disabled=card.id===state.openingId;
-  button.title=card.name+" · "+shortStatus(card)+"\n"+(card.project_label||"")+" · "+relativeTime(activityTime(card))+(card.task_brief?"\nAI 摘要："+card.task_brief:"")+"\n点击在 Codex 中打开";
+  button.title=card.name+" · "+shortStatus(card)+"\n"+(card.project_label||"")+" · "+relativeTime(activityTime(card))+"\n点击在 Codex 中打开";
   const icon=node("i","task-state");icon.setAttribute("aria-hidden","true");
   const copy=node("div","task-copy"),title=node("div","task-title-line");
   title.append(node("strong","",card.name));
   title.append(node("span","row-status",shortStatus(card)));
-  const meta=node("div","task-meta"),brief=node("span",card.task_brief?"stage ai-brief":"stage",card.task_brief||card.summary||card.project_label||"任务");
-  brief.title=briefExplanation(card);meta.append(brief);
+  const meta=node("div","task-meta"),progress=node("span","stage",card.summary||card.project_label||"任务");
+  progress.title=card.summary?"最近进展 · "+card.summary:"";meta.append(progress);
   if(status==="running"){
     const speed=node("span","row-rate");speed.title="当前任务 · 近 60 秒 Token 消耗速度，含输入与输出";
     const fan=node("span","token-fan mini-fan");renderTokenFan(fan,card.tokens,true);
     speed.append(fan,node("span","",rateText(card.tokens)));meta.append(speed);
   }else meta.append(node("time","",relativeTime(activityTime(card))));
   copy.append(title,meta);button.replaceChildren(icon,copy);
-}
-function briefExplanation(card) {
-  if(card.task_brief)return "AI 摘要 · "+(card.brief_status==="ready"?"依据近期对话":"上次摘要，等待更新")+"\n"+card.task_brief;
-  if(card.summary)return "最近进展 · "+card.summary;
-  return {pending:"正在概括近期对话",insufficient:"对话信息不足，暂时保留原任务名",unavailable:"AI 摘要暂不可用，稍后重试"}[card.brief_status]||"";
 }
 async function api(path, body) {
   const response = await fetch(path, {
@@ -256,7 +251,7 @@ function filtered() {
   const query=$("searchInput").value.trim().toLowerCase();
   const rank=t=>state.connected&&t.status==="running"?2:state.filter==="recent"&&!t.unread?1:0;
   return (boardSets()[state.filter]||[]).filter(t=>
-    (!query || [t.task_brief,t.summary,t.name,t.project_label].join(" ").toLowerCase().includes(query))
+    (!query || [t.summary,t.name,t.project_label].join(" ").toLowerCase().includes(query))
   ).sort((a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
 }
 function renderList(force=false) {
@@ -411,7 +406,7 @@ async function init() {
   await refresh();
   setInterval(refresh,5000);
   const events=new EventSource("/api/events");
-  for(const name of ["feed_updated","summaries_updated","task_started","user_gate_required","user_gate_resolved","codex_event"]){
+  for(const name of ["feed_updated","task_started","user_gate_required","user_gate_resolved","codex_event"]){
     events.addEventListener(name,e=>{
       if(name==="codex_event"){
         const payload=JSON.parse(e.data||"{}");

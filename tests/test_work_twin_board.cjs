@@ -70,9 +70,9 @@ assert.deepEqual(ids(ctx.filtered()).slice(-2),['running','running-with-old-resu
 elements.searchInput.value='running';
 assert.deepEqual(ids(ctx.filtered()),['running','running-with-old-result'],'search preserves the running group recency order');
 elements.searchInput.value='';
-state.threads[0].task_brief='修订住房报告角色诉求';
+state.threads[0].summary='修订住房报告角色诉求';
 elements.searchInput.value='住房报告';
-assert.deepEqual(ids(ctx.filtered()),[state.threads[0].id],'AI summaries participate in scoped search without renaming tasks');
+assert.deepEqual(ids(ctx.filtered()),[state.threads[0].id],'existing progress text participates in search without renaming tasks');
 elements.searchInput.value='';
 state.filter='history';
 state.threads.push(card('history-old',3*day),card('history-new',2*day,{unread:false}));

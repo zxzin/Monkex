@@ -10,7 +10,6 @@ if (!(Test-Path $backend) -or !(Test-Path $app)) { throw 'Installed executables 
 python scripts/smoke_monkex_backend.py $backend (Join-Path $installDir 'web')
 if ($LASTEXITCODE -ne 0) { throw 'Installed backend smoke failed' }
 $env:MONKEX_CODEX_PATH = Join-Path $installDir 'missing-codex-for-smoke.exe'
-$env:MONKEX_AI_SUMMARIES = '0'
 Add-Type @'
 using System;
 using System.Collections.Generic;

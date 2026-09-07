@@ -19,7 +19,6 @@ from .read_receipts import CodexReadReceipts
 from .activity import ActivityFeed
 from .runtime_observer import LocalRuntimeObserver
 from .weekly_quota import weekly_quota, primary_usage
-from .semantic_summary import CodexSummaryEngine, TaskSummaries
 from .platform_support import data_directory, open_codex_thread
 
 
@@ -123,9 +122,6 @@ class WorkTwinShell:
             self.client.on_message = self._on_app_server_message
         self._usage_thread: threading.Thread | None = None
         self._feed_thread: threading.Thread | None = None
-        ai_enabled = os.environ.get("MONKEX_AI_SUMMARIES", "0" if getattr(sys, "frozen", False) else "1") == "1"
-        self.summaries = TaskSummaries(CodexSummaryEngine() if client is None and ai_enabled else None,
-            on_update=lambda: self.events.publish({"type": "summaries_updated", "at": _utc_now()}))
         self.feed = ActivityFeed(self)
 
     def start(self) -> None:
@@ -136,7 +132,6 @@ class WorkTwinShell:
             self.client.close()
         # Informational usage polling runs outside the UI startup path.
         self._stop_event.clear()
-        self.summaries.start()
         self._usage_thread = threading.Thread(
             target=self._usage_loop,
             name="work-twin-usage-info",
@@ -149,7 +144,6 @@ class WorkTwinShell:
 
     def close(self) -> None:
         self._stop_event.set()
-        self.summaries.close()
         self.client.close()
 
     def health(self) -> dict[str, Any]:
@@ -336,8 +330,6 @@ class WorkTwinShell:
                 self._feed_at = time.time()
         with self._feed_lock:
             result = deepcopy(self._feed_snapshot)
-        for card in result.get("threads", []):
-            card.update(self.summaries.view(card["id"]))
         result["health"] = self.health()
         result["observed_at"] = self._feed_at or None
         result["stale"] = bool(self._feed_at and time.time() - self._feed_at > 30)

@@ -21,7 +21,7 @@ def main():
         port = port_socket.getsockname()[1]
     with tempfile.TemporaryDirectory(prefix="monkex-clean-user-") as temporary:
         env = dict(os.environ, MONKEX_CODEX_PATH=str(Path(temporary) / "missing-codex"),
-                   MONKEX_DATA_DIR=temporary, MONKEX_STATIC_ROOT=str(args.web.resolve()), MONKEX_AI_SUMMARIES="0")
+                   MONKEX_DATA_DIR=temporary, MONKEX_STATIC_ROOT=str(args.web.resolve()))
         process = subprocess.Popen([str(args.binary.resolve()), "--port", str(port)], env=env,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         base = f"http://127.0.0.1:{port}"

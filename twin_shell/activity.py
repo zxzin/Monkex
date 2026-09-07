@@ -9,7 +9,6 @@ from typing import Any
 from .task_view import describe
 from .runtime_observer import apply_runtime
 from .token_meter import aggregate_project_tokens
-from .semantic_summary import context_for
 
 
 SOURCES = ["cli", "vscode", "exec", "appServer", "unknown"]
@@ -38,7 +37,6 @@ class ActivityFeed:
         if not force and cached and time.monotonic() - cached[0] < ttl and cached[1].get("runtime_revision") == evidence.get("revision") and (metadata_time is None or cached[1]["card"].get("updated_at") == metadata_time):
             payload = deepcopy(cached[1])
             self.telemetry(payload["card"])
-            payload["card"].update(self.shell.summaries.view(thread_id))
             return payload
         shell = self.shell
         raw = shell._result_or_raise(shell.client.request("thread/read", {"threadId": thread_id, "includeTurns": False}), "读取任务").get("thread")
@@ -56,10 +54,6 @@ class ActivityFeed:
             apply_runtime(card, evidence)
         self.telemetry(card)
         self.observe(card)
-        # Inference follows the displayed seven-day window and explicit details.
-        if force or card.get("status") == "running" or (card.get("updated_at") or 0) >= time.time() - 7 * 86400:
-            shell.summaries.observe(thread_id, context_for(raw, turns, active=card.get("status") == "running"))
-        card.update(shell.summaries.view(thread_id))
         payload = {"thread": shell._present_thread(raw), "card": card, "shell": deepcopy(shell._state["tasks"].get(thread_id)), "runtime_revision": evidence.get("revision")}
         self.cache[thread_id] = (time.monotonic(), payload)
         return deepcopy(payload)

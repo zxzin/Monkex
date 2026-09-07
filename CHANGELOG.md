@@ -2,6 +2,8 @@
 
 ## 0.1.1 Preview
 
+- Removed additional AI task-summary generation, its background worker and configuration switch. The board displays existing Codex progress text.
+
 - Banana planter footer with live weekly quota, aligned below tree roots.
 - ImageGen round banana coins expressing observed Token activity; progress bar removed.
 - Green (>50%), yellow (>20% to 50%) and red (≤20%) quota states.

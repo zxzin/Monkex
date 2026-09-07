@@ -10,7 +10,7 @@ A tiny, local-first desktop companion for Codex: live task status, unread result
 
 [下载安装包](https://github.com/zxzin/Monkex/releases) · [发给 Codex 的安装提示词](INSTALL_WITH_CODEX.md) · [安装与故障排查](docs/INSTALL.md) · [更新记录](CHANGELOG.md) · [反馈问题](https://github.com/zxzin/Monkex/issues)
 
-> 展示图由当前产品界面渲染，使用公开示例任务与额度，未包含作者真实对话。安装版默认显示已有任务/进展文本，AI 总结需要主动开启。
+> 展示图由当前产品界面渲染，使用公开示例任务与额度，未包含作者真实对话。看板直接显示 Codex 已有任务标题与进展文本。
 
 ## 能做什么？
 
@@ -39,7 +39,7 @@ A tiny, local-first desktop companion for Codex: live task status, unread result
 ~~~text
 请帮我安装 Monkex：https://github.com/zxzin/Monkex 。
 先读取仓库 README、INSTALL_WITH_CODEX.md 和公开 Releases，识别本机系统及 CPU 架构，下载对应的最新公开安装包（可选 Preview），核验 SHA256，保留已有用户数据并安装。
-检查并连接我自己的本机 Codex。没有匹配包时暂停说明，不默认源码编译。不读取或上传凭据，不修改 Codex 配置，不自动启用 AI 总结。遇到未签名/未公证警告、登录或管理员授权时先解释并让我确认，不关闭系统安全保护。
+检查并连接我自己的本机 Codex。没有匹配包时暂停说明，不默认源码编译。不读取或上传凭据，不修改 Codex 配置。遇到未签名/未公证警告、登录或管理员授权时先解释并让我确认，不关闭系统安全保护。
 最后报告安装版本、路径、启动方式和实际验证结果。
 ~~~
 
@@ -64,7 +64,7 @@ Monkex 只观察、记录已读并导航。新建任务、回复、审批和执�
 
 它遵循现有 CODEX_HOME。若多个 Codex 账号共享同一系统用户或历史目录，Monkex 不按云账号二次拆分；它是本机目录级接入，不是跨账号云同步。
 
-**安装版默认关闭 AI 总结。** 主动设置 MONKEX_AI_SUMMARIES=1 才会将近期上下文交给你的 Codex 服务生成摘要，消耗你自己的额度，并遵循该服务的数据政策。Monkex 自身无分析埋点或远程上传服务，登录由 Codex 管理。
+看板直接读取并展示 Codex 已有任务信息，不额外发起模型生成请求。Monkex 自身无分析埋点或远程上传服务，登录由 Codex 管理。
 
 ## 开发者构建
 
