@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -19,12 +20,21 @@ class RuntimeTests(unittest.TestCase):
         self.log.touch()
         self.now = datetime.now(timezone.utc).timestamp()
         self.observer = LocalRuntimeObserver(self.root, clock=lambda: self.now)
-        with sqlite3.connect(self.root / "state_5.sqlite") as db:
+        with closing(sqlite3.connect(self.root / "state_5.sqlite")) as db, db:
             db.execute("CREATE TABLE threads (id TEXT, rollout_path TEXT, archived INTEGER)")
             db.execute("INSERT INTO threads VALUES (?,?,0)", ("thread-a", str(self.log)))
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_refresh_closes_database_connection(self):
+        connection = sqlite3.connect(self.root / "state_5.sqlite")
+        tracked = mock.Mock(wraps=connection)
+        with mock.patch("twin_shell.runtime_observer.sqlite3.connect", return_value=tracked):
+            self.observer.refresh(["thread-a"])
+        tracked.close.assert_called_once_with()
+        with self.assertRaises(sqlite3.ProgrammingError):
+            connection.execute("SELECT 1")
 
     def event(self, kind, *, turn_id=None, envelope="event_msg", **extra):
         payload = {"type": kind, **extra}
@@ -131,7 +141,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(self.observed()["status"], "unknown")
         new = self.log.with_name("next.jsonl")
         new.write_text(self.event("task_complete", turn_id="turn-2"))
-        with sqlite3.connect(self.root / "state_5.sqlite") as db:
+        with closing(sqlite3.connect(self.root / "state_5.sqlite")) as db, db:
             db.execute("UPDATE threads SET rollout_path=?", (str(new),))
         self.assertEqual(self.observed()["status"], "completed")
 

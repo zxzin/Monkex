@@ -5,6 +5,7 @@ are observed separately through structured local rollout events. Only IDs,
 timestamps and lifecycle state survive parsing, in memory only.
 """
 from __future__ import annotations
+from contextlib import closing
 
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -66,7 +67,7 @@ class LocalRuntimeObserver:
                 databases = sorted(self.root.glob("state_[0-9]*.sqlite"), key=lambda p: int(p.stem.split("_")[-1]))
                 if not databases:
                     raise OSError("Local state database unavailable")
-                with sqlite3.connect(databases[-1].as_uri() + "?mode=ro", uri=True, timeout=1) as db:
+                with closing(sqlite3.connect(databases[-1].as_uri() + "?mode=ro", uri=True, timeout=1)) as db:
                     paths = {}
                     for start in range(0, len(thread_ids), 400):
                         batch = thread_ids[start:start+400]
