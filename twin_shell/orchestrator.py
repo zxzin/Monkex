@@ -15,6 +15,7 @@ from typing import Any
 
 
 from .app_server import AppServerClient, AppServerError
+from .read_receipts import CodexReadReceipts
 from .activity import ActivityFeed
 from .runtime_observer import LocalRuntimeObserver
 from .weekly_quota import weekly_quota, primary_usage
@@ -117,6 +118,7 @@ class WorkTwinShell:
         self.client = client or AppServerClient(on_message=self._on_app_server_message)
         # Fixture clients stay isolated from the user's actual local history.
         self.runtime_observer = runtime_observer or (LocalRuntimeObserver(Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))) if client is None else None)
+        self.codex_read_receipts = CodexReadReceipts(self.runtime_observer.root) if client is None and self.runtime_observer else None
         if client is not None:
             self.client.on_message = self._on_app_server_message
         self._usage_thread: threading.Thread | None = None

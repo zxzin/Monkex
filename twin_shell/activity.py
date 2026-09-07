@@ -140,6 +140,10 @@ class ActivityFeed:
             return card
         with ThreadPoolExecutor(max_workers=4) as pool:
             rows = list(pool.map(row, raw_threads))
+        if shell.codex_read_receipts:
+            with shell._state_lock:
+                if shell.codex_read_receipts.reconcile(shell._state["observations"], rows):
+                    shell._save_state()
         rows.sort(key=lambda r: r.get("updated_at") or 0, reverse=True)
         self.project_tokens = aggregate_project_tokens(rows)
         for card in rows:

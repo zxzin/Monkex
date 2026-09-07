@@ -11,6 +11,7 @@ WEB_FILES = ["index.html", "styles.css", "app.js", "banana-tree.js", "read-play.
     "assets/monkey-banana-2026-09-07/gold-chain-monkey.png",
     "assets/monkey-banana-2026-09-07/pixel-banana-v4-diagonal.png",
     "assets/monkey-banana-2026-09-07/pixel-banana-green-v1.png",
+    "assets/monkex-coins-2026-09-07/banana-coin-v1.png",
     "assets/monkey-run-2026-09-07/run-atlas.png"]
 
 

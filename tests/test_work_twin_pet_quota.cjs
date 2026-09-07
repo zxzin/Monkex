@@ -3,15 +3,15 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const root=path.join(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const source=read('shell/app.js'),html=read('shell/index.html'),css=read('shell/styles.css');
 const elements=new Map();
-const $=id=>{if(!elements.has(id))elements.set(id,{dataset:{},children:[],setAttribute(k,v){this[k]=v;}});return elements.get(id);};
+const $=id=>{if(!elements.has(id))elements.set(id,{dataset:{},style:{setProperty(k,v){this[k]=v}},children:[],parts:{},getClientRects:()=>[{}],querySelector(key){return this.parts[key]??= {style:{},animations:[],getAnimations(){return[]},animate(frames,options){this.animations.push({frames,options})}}},setAttribute(k,v){this[k]=v;}});return elements.get(id);};
 const now=Date.now()/1000;
 const state={connected:true,weeklyUsage:{available:true,remaining_percent:68,observed_at:now,resets_at:now+3600}};
 let unread=2,running=1;
-const ctx={state,$,Date,window:{WorkTwinBananaTree:require('../shell/banana-tree.js')},
+const ctx={state,$,Date,document:{hidden:false},window:{matchMedia:()=>({matches:false}),WorkTwinBananaTree:require('../shell/banana-tree.js')},
   displayStatus:t=>t.unread?'unread':'running',boardSets:()=>({board:[...Array.from({length:unread},()=>({unread:true})),...Array.from({length:running},()=>({status:'running'}))],recent:Array.from({length:unread},()=>({unread:true})),history:[]})};
 vm.createContext(ctx);
 vm.runInContext(source.slice(source.indexOf('function updateCounts('),source.indexOf('function activityTime(')),ctx);
-function verify(value,tone){ctx.updateCounts();assert.equal($('petQuotaRemaining').textContent,value);assert.equal($('weeklyRemaining').textContent,value);assert.equal($('petQuota').dataset.state,tone);assert.equal($('petQuota').title,$('weeklyQuota').title);}
+function verify(value,tone){ctx.updateCounts();assert.equal($('petQuotaRemaining').textContent,value);assert.equal($('weeklyRemaining').textContent,value);assert.equal($('petQuota').dataset.state,tone);assert.ok($('weeklyQuota').title.startsWith($('petQuota').title));}
 verify('68%','normal');
 assert.equal($('petGrowth').dataset.count,'1','production connects running count to green fruit');
 assert.match($('petLauncher')['aria-label'],/2 根香蕉待收.*1 项任务进行中.*周剩余 68%/);
@@ -23,6 +23,49 @@ state.weeklyUsage.remaining_percent=68;state.weeklyUsage.observed_at=now-91;veri
 state.weeklyUsage.observed_at=now;state.weeklyUsage.resets_at=now-1;verify('—','unknown');
 state.weeklyUsage.resets_at=now+3600;running=3;state.connected=false;verify('—','unknown');assert.equal($('petGrowth').dataset.count,'0');
 state.connected=true;state.weeklyUsage=null;verify('—','unknown');
+state.weeklyUsage={available:true,remaining_percent:55,observed_at:now,resets_at:now+3600};verify('55%','normal');
+state.weeklyUsage={...state.weeklyUsage,remaining_percent:54,observed_at:now+1};verify('54%','normal');
+verify('54%','normal');
+state.weeklyUsage={...state.weeklyUsage,remaining_percent:100,observed_at:now+2,resets_at:now+7200};verify('100%','normal');
+ctx.window.matchMedia=()=>({matches:true});
+state.weeklyUsage={...state.weeklyUsage,remaining_percent:99,observed_at:now+3};verify('99%','normal');
+ctx.window.matchMedia=()=>({matches:false});ctx.document.hidden=true;
+state.weeklyUsage={...state.weeklyUsage,remaining_percent:98,observed_at:now+4};verify('98%','normal');
+ctx.document.hidden=false;
+$('weeklyQuota').getClientRects=()=>[];
+state.weeklyUsage={...state.weeklyUsage,remaining_percent:97,observed_at:now+5};verify('97%','normal');
+assert.equal($('petQuotaRemaining').textContent,'97%');
+assert.deepEqual($('petQuota').parts,{},'collapsed quota has no meter or animation renderer');
+const flow=$('weeklyQuota'),normal={state:'normal'};
+const card=rate=>({status:'running',tokens:{ready:true,tokens_per_min:rate,last_report_at:now}});
+ctx.renderQuotaFlow(flow,[card(10000)],normal);
+assert.equal(flow.dataset.flowing,'true','positive observed Token rate animates while weekly percent stays unchanged');
+const slow=parseFloat(flow.style['--coin-period']);
+ctx.renderQuotaFlow(flow,[card(100000),card(200000)],normal);
+assert.ok(parseFloat(flow.style['--coin-period'])<slow,'aggregate higher rate accelerates coins');
+assert.ok(parseFloat(flow.style['--coin-period'])>=.9,'bounded animation speed');
+for(const cards of [[],[card(0)],[card(NaN)],[{...card(1),status:'read'}],[{status:'running',tokens:{...card(1).tokens,ready:false}}],[{status:'running',tokens:{...card(1).tokens,last_report_at:now-61}}]]){
+  ctx.renderQuotaFlow(flow,cards,normal);assert.equal(flow.dataset.flowing,'false','idle, invalid and stale Token observations stop');
+}
+state.connected=false;ctx.renderQuotaFlow(flow,[card(10)],normal);assert.equal(flow.dataset.flowing,'false');state.connected=true;
+ctx.renderQuotaFlow(flow,[card(10)],{state:'unknown'});assert.equal(flow.dataset.flowing,'false');
+assert.equal((html.match(/class="quota-coins"/g)||[]).length,1,'coins belong only to expanded board');
+assert.match(css,/@keyframes quota-coin-spend/);
+assert.ok(css.includes('html[data-page-hidden=true] .quota-coins i,.pet-mode[data-mode=collapsed] .quota-coins i{animation-play-state:paused}'));
+assert.match(css,/@media\(prefers-reduced-motion:reduce\)\{\[data-flowing=true\] \.quota-coins i\{animation:none/);
+assert.match(html,/id="petQuota"[^>]*><span>周余<\/span><strong id="petQuotaRemaining">—<\/strong><\/span>/);
+for(const removed of ['quota-meter','quota-fill','quota-spent','quota-delta','renderQuotaMeter'])assert.ok(!(html+css+source).includes(removed),'remove obsolete progress bar '+removed);
+assert.match(html,/class="quota-number"><strong id="weeklyRemaining">—<\/strong><span class="quota-coins"/,'coins originate at the actual quota number');
+assert.match(css,/width:12px;height:12px;background:url\('\/shell\/assets\/monkex-coins-2026-09-07\/banana-coin-v1.png'\)/,'round ImageGen sprite retains square aspect');
+assert.ok(fs.existsSync(path.join(root,'shell/assets/monkex-coins-2026-09-07/banana-coin-v1.png')));
+assert.match(read('scripts/build_monkex_release.py'),/monkex-coins-2026-09-07\/banana-coin-v1.png/,'packaged resource allowlist includes coin');
+assert.match(css,/\.pet-quota\s*\{[^}]*height: 14px;/,'lower planter rim two pixels while keeping its base inside the launcher');
+assert.match(css,/\.pet-quota\s*\{[^}]*width: 58px;[^}]*background: transparent;/,'quota text belongs to the planter, with no floating label background');
+assert.match(css,/\.pet-quota::before\{[^}]*clip-path:polygon/,'pixel-step planter body');
+assert.match(css,/\.pet-quota::after\{[^}]*height:1px;[^}]*background:#675432/,'soil line receives the trunk');
+assert.match(css,/\.pet-tree-stage\s*\{[^}]*transform: scale\(\.8\);/);
+assert.match(css,/\.pet-tree-stage\s*\{[^}]*top: 2px;/,'tree settles into soil rim');
+assert.ok(Math.abs(2+(1+72)*.8-(74-14))<1,'planter rim meets root bottom within one pixel');
 for(const obsolete of ['petStateLabel','petUsageValue','pet-state-label','pet-usage'])assert.ok(!(html+source+css).includes(obsolete),'remove obsolete corner marker '+obsolete);
 assert.match(html,/id="petQuota" class="pet-quota"/);
 assert.match(css,/\.pet-quota\s*\{[^}]*left: 50%;[^}]*bottom: 0;/);

@@ -201,6 +201,7 @@ function updateCounts() {
   $("petQuota").dataset.state=quota.state;
   $("petQuota").title=$("weeklyQuota").title;
   const groups=boardSets();
+  renderQuotaFlow($("weeklyQuota"),groups.board,quota);
   const running=groups.board.filter(t=>state.connected&&t.status==="running").length;
   const unread=groups.recent.filter(t=>displayStatus(t)==="unread").length;
   $("boardCount").textContent=groups.board.length;
@@ -222,7 +223,20 @@ function weeklyQuotaState(usage,now=Date.now()/1000) {
     (usage.resets_at==null||usage.resets_at>now);
   if(!valid)return {label:"—",state:"unknown"};
   const remaining=Math.max(0,Math.min(100,usage.remaining_percent));
-  return {label:String(Math.round(remaining*10)/10)+"%",state:remaining<=20?"low":"normal"};
+  return {label:String(Math.round(remaining*10)/10)+"%",state:remaining<=20?"low":"normal",remaining};
+}
+function renderQuotaFlow(element,cards,quota) {
+  // Coins express the observed rolling Token rate; one coin has no billing value.
+  const now=Date.now()/1000;
+  const rate=state.connected?cards.reduce((sum,card)=>{
+    const tokens=card.tokens;
+    const fresh=Number.isFinite(tokens?.last_report_at)&&now-tokens.last_report_at<=60&&now-tokens.last_report_at>=-30;
+    return sum+(card.status==='running'&&fresh&&tokens?.ready&&Number.isFinite(tokens.tokens_per_min)&&tokens.tokens_per_min>0?tokens.tokens_per_min:0);
+  },0):0;
+  element.dataset.flowing=String(rate>0&&quota.state!=='unknown');
+  element.style.setProperty('--coin-period',(rate>0?Math.max(.9,3.2/(1+Math.sqrt(rate/100000))):3.2)+'s');
+  const description=rate>0?' · 运行任务近60秒 Token 速率合计 '+Math.round(rate).toLocaleString()+' /min · 金币速度表示活跃度，不代表逐枚扣费':' · 当前无已观测的 Token 消耗';
+  element.title+=description;
 }
 function activityTime(card) {
   const seconds=value=>typeof value==="number"?value:typeof value==="string"?Date.parse(value)/1000:NaN;

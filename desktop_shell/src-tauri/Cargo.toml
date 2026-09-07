@@ -1,6 +1,6 @@
 [package]
 name = "zinx-work-twin"
-version = "0.1.0"
+version = "0.1.1"
 description = "Always-on-top desktop pet shell for the Zinx work twin."
 authors = ["zin"]
 edition = "2021"

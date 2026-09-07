@@ -48,6 +48,76 @@ class FeedClient:
         return {"result": {}}
 
 
+class CodexReadReceiptTests(unittest.TestCase):
+    def setUp(self):
+        from twin_shell.read_receipts import CodexReadReceipts
+        self.tmp = tempfile.TemporaryDirectory()
+        self.adapter = CodexReadReceipts(Path(self.tmp.name))
+        self.ledger = {"thread-0": {"result_version": "result-a"}}
+        self.cards = [{"id": "thread-0", "status": "result_ready", "unread": True}]
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def snapshot(self, ids, host="local"):
+        self.adapter.path.write_text(json.dumps({"electron-persisted-atom-state": {"unread-thread-ids-by-host-v1": {host: ids}}}), encoding="utf-8")
+
+    def test_codex_view_clears_matching_result(self):
+        self.snapshot(["thread-0"])
+        self.adapter.reconcile(self.ledger, self.cards)
+        self.snapshot([])
+        self.assertTrue(self.adapter.reconcile(self.ledger, self.cards))
+        self.assertFalse(self.cards[0]["unread"])
+        self.assertEqual(self.ledger["thread-0"]["ack_version"], "result-a")
+        self.assertFalse(self.adapter.reconcile(self.ledger, self.cards))
+
+    def test_absence_at_first_launch_does_not_mark_everything_read(self):
+        self.snapshot([])
+        self.adapter.reconcile(self.ledger, self.cards)
+        self.assertTrue(self.cards[0]["unread"])
+
+    def test_new_result_cannot_be_cleared_by_old_removal(self):
+        self.snapshot(["thread-0"])
+        self.adapter.reconcile(self.ledger, self.cards)
+        self.ledger["thread-0"]["result_version"] = "result-b"
+        self.snapshot([])
+        self.adapter.reconcile(self.ledger, self.cards)
+        self.assertTrue(self.cards[0]["unread"])
+        self.assertNotIn("ack_version", self.ledger["thread-0"])
+
+    def test_restart_keeps_version_bound_receipt(self):
+        from twin_shell.read_receipts import CodexReadReceipts
+        self.snapshot(["thread-0"])
+        self.adapter.reconcile(self.ledger, self.cards)
+        restored = json.loads(json.dumps(self.ledger))
+        self.snapshot([])
+        CodexReadReceipts(self.adapter.path.parent).reconcile(restored, self.cards)
+        self.assertFalse(self.cards[0]["unread"])
+
+    def test_running_state_stays_running(self):
+        self.cards[0]["status"] = "running"
+        self.test_codex_view_clears_matching_result()
+        self.assertEqual(self.cards[0]["status"], "running")
+
+    def test_invalid_missing_remote_and_changed_schema_are_safe(self):
+        self.snapshot(["thread-0"])
+        self.adapter.reconcile(self.ledger, self.cards)
+        for payload in ["{", "{}", "null", '{"electron-persisted-atom-state": []}']:
+            self.adapter.path.write_text(payload, encoding="utf-8")
+            self.assertFalse(self.adapter.reconcile(self.ledger, self.cards))
+            self.assertTrue(self.cards[0]["unread"])
+        self.snapshot([], host="remote")
+        self.assertFalse(self.adapter.reconcile(self.ledger, self.cards))
+        self.snapshot("thread-0")
+        self.assertFalse(self.adapter.reconcile(self.ledger, self.cards))
+
+    def test_other_user_directory_never_imports_receipt(self):
+        from twin_shell.read_receipts import CodexReadReceipts
+        with tempfile.TemporaryDirectory() as other:
+            self.assertFalse(CodexReadReceipts(Path(other)).reconcile(self.ledger, self.cards))
+            self.assertTrue(self.cards[0]["unread"])
+
+
 class ActivityTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -70,6 +140,19 @@ class ActivityTests(unittest.TestCase):
         self.assertEqual(card["status"], "result_ready")
         self.assertIn("尚未验收", card["stage"])
         self.assertFalse(card["can_send"])
+
+    def test_feed_syncs_codex_receipt_through_cached_rows(self):
+        from twin_shell.read_receipts import CodexReadReceipts
+        self.shell.codex_read_receipts = CodexReadReceipts(self.root)
+        path = self.shell.codex_read_receipts.path
+        def write(ids):
+            path.write_text(json.dumps({"electron-persisted-atom-state": {"unread-thread-ids-by-host-v1": {"local": ids}}}), encoding="utf-8")
+        write(["thread-0"])
+        self.assertTrue(self.shell.list_threads()["threads"][0]["unread"])
+        write([])
+        self.assertFalse(self.shell.list_threads()["threads"][0]["unread"])
+        self.assertFalse(self.shell.list_threads()["threads"][0]["unread"])
+        self.assertEqual(json.loads(self.shell.state_path.read_text())["observations"]["thread-0"]["ack_version"], self.shell.read_thread("thread-0")["card"]["result_version"])
 
     def test_external_in_progress_is_not_confirmed_live(self):
         card = describe({"status": {"type": "notLoaded"}}, [{"id": "t", "status": "inProgress", "items": []}], owned=False)
