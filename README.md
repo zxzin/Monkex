@@ -6,7 +6,7 @@ Monkex is an independent companion, not an OpenAI product.
 
 ## Download status
 
-This first distribution is being validated. Source is available; installation packages remain draft until their platform checks pass. Windows support currently requires installation and real Codex navigation testing on a Windows desktop. Build success alone is not a compatibility guarantee.
+Source is public. The 0.1.0 preview installers are prepared as a GitHub Release draft, pending acceptance of unsigned-distribution and remaining integration-test risks. [The candidate build](https://github.com/zxzin/Monkex/actions/runs/34108451745) passes both platforms: Windows CI verifies installation, a visible native window, offline startup and exit cleanup; the downloaded macOS app has been tested for live sync and quit/relaunch. Real signed-in Codex navigation on a Windows desktop remains unverified. This is not yet a public installer release.
 
 ## Requirements
 
