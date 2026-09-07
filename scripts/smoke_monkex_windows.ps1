@@ -59,7 +59,10 @@ try {
 } finally {
   if (!$process.HasExited) {
     if ($window -ne [IntPtr]::Zero) { $null = [MonkexWindows]::PostMessage($window, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) }
-    if (!$process.WaitForExit(5000)) { Stop-Process -Id $process.Id -Force }
+    if (!$process.WaitForExit(5000)) {
+      Stop-Process -Id $process.Id -Force
+      throw 'Main-window close failed to exit the app; effect windows must share its lifecycle'
+    }
   }
 }
 $leaked = $false

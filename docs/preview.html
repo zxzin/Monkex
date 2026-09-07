@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>Monkex · public demonstration data</title>
+<script>
+// Renders production UI with explicit public sample data, never local Codex data.
+function demoBootstrap(){
+  const now=Date.now()/1000;
+  const definitions=[
+    ['完成个人作品集首页','已完成响应式布局与作品展示','unread',180],
+    ['检查新版本发布清单','整理安装包、变更记录和使用说明','unread',540],
+    ['优化移动端导航','修复小屏菜单与键盘访问体验','unread',960],
+    ['补充接口回归测试','核验正常响应与异常输入','read',1800],
+    ['开发新的数据看板','正在实现筛选与趋势图表','running',10],
+    ['整理项目使用文档','正在编写安装与快速开始指南','running',20],
+  ];
+  const threads=definitions.map(([name,summary,status,age],i)=>({id:'public-demo-'+i,name,summary,status:status==='running'?'running':'completed',unread:status==='unread',project_label:'Demo project',updated_at:now-age,runtime_observed_at:now-age,tokens:{ready:true,tokens_per_min:status==='running'?(i===4?182400:76400):0,last_report_at:now},result_version:'demo-1'}));
+  window.fetch=async()=>({ok:true,json:async()=>({threads,observed_at:now,health:{app_server:'online',usage:{weekly:{available:true,remaining_percent:68,observed_at:Date.now()/1000,resets_at:now+604800}}},coverage:{external_runtime:'local_events'}})});
+  window.EventSource=class{addEventListener(){} close(){}};
+  localStorage.removeItem('twin-pinned');
+  window.addEventListener('load',()=>{
+    if(location.search.includes('expanded'))setTimeout(()=>document.querySelector('[data-filter=recent]')?.click(),100);
+    setTimeout(()=>{for(const a of document.getAnimations()){a.pause();a.currentTime=340;}document.documentElement.dataset.demoReady='true';},450);
+  });
+}
+fetch('/shell/index.html').then(r=>r.text()).then(html=>{
+  const injected='<script>('+demoBootstrap.toString()+')()<'+ '/script>';
+  document.open();document.write(html.replace('<head>','<head>'+injected));document.close();
+});
+</script>

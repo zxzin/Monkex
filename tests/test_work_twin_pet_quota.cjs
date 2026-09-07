@@ -66,6 +66,7 @@ const native=read('desktop_shell/src-tauri/src/lib.rs');
 assert.match(native,/fx\.set_ignore_cursor_events\(true\)/,'native overlay passes all clicks through');
 assert.match(native,/\.focused\(false\)\.focusable\(false\)\.visible\(false\)/,'effect cannot focus or show before telemetry');
 assert.match(native,/"quota-fx"/);assert.match(native,/const COMPACT_WIDTH: f64 = 344\.0/,'board hit width unchanged');
+assert.match(native,/WindowEvent::CloseRequested \{ api, \.\. \}[\s\S]*api\.prevent_close\(\);\s*tracking\.app_handle\(\)\.exit\(0\)/,'closing main exits the app even with a hidden effect window');
 assert.match(css,/\.coin-overlay \.quota-coins\{left:48px;top:58px\}/,'overlay anchor matches native offset');
 assert.ok(!read('shell/coin-overlay.html').includes('<script'),'effect has no independent telemetry or privileged script');
 assert.ok(fs.existsSync(path.join(root,'shell/assets/monkex-coins-2026-09-07/banana-coin-v1.png')));

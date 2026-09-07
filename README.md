@@ -1,61 +1,89 @@
-# Monkex
+# Monkex · Codex 桌面任务看板
 
-A tiny banana orchard for your Codex tasks. Green bananas are running tasks; ripe bananas are unread results. Click a task to open its original conversation in Codex and collect the banana.
+**把 Codex 的进展，种在桌面上。**
 
-Monkex is an independent companion, not an OpenAI product.
+Monkex 面向 **OpenAI Codex 桌面用户**：用像素香蕉树展示运行任务和未读结果，点击看板任务即可回到 Codex 原对话。支持 macOS Apple Silicon 与 Windows x64。
 
-## Download status
+A tiny, local-first desktop companion for Codex: live task status, unread results, weekly quota and playful banana collectibles. Independent software; not an OpenAI product.
 
-Source is public. The 0.1.0 preview installers are prepared as a GitHub Release draft, pending acceptance of unsigned-distribution and remaining integration-test risks. [The candidate build](https://github.com/zxzin/Monkex/actions/runs/34108451745) passes both platforms: Windows CI verifies installation, a visible native window, offline startup and exit cleanup; the downloaded macOS app has been tested for live sync and quit/relaunch. Real signed-in Codex navigation on a Windows desktop remains unverified. This is not yet a public installer release.
+![Monkex 实际界面：香蕉树与任务看板，公开示例任务和额度](docs/monkex-showcase.png)
 
-## Requirements
+[下载安装包](https://github.com/zxzin/Monkex/releases) · [发给 Codex 的安装提示词](INSTALL_WITH_CODEX.md) · [安装与故障排查](docs/INSTALL.md) · [更新记录](CHANGELOG.md) · [反馈问题](https://github.com/zxzin/Monkex/issues)
 
-- Codex desktop app installed and signed in. Monkex does not include Codex, create accounts, or bypass subscription limits.
-- macOS Apple Silicon, or Windows 10/11 x64 with WebView2. Windows installer can download WebView2 when absent (internet required).
-- A native Codex executable supporting `app-server --listen stdio://`. For nonstandard installations, set `MONKEX_CODEX_PATH` to its full executable path before launching Monkex. On Windows this must be an `.exe`, not a WSL path or `.cmd` wrapper.
-- Codex must register the `codex://threads/…` URL handler. Windows URL handling is pending real-desktop verification.
+> 展示图由当前产品界面渲染，使用公开示例任务与额度，未包含作者真实对话。安装版默认显示已有任务/进展文本，AI 总结需要主动开启。
 
-## Use
+## 能做什么？
 
-1. Start Codex and sign in.
-2. Start Monkex. The banana tree lives in the lower-right corner; click it to expand the board.
-3. Click a task to open it in Codex. The pin keeps the board expanded. Right-click the tree to expand/collapse or quit.
+- **桌面香蕉树**：绿香蕉代表进行中，黄香蕉代表完成未读。收起时花盆显示周剩余额度。
+- **快速找回任务**：看板、近24小时、历史7天；近期未读优先，点击直达 Codex 原任务。
+- **收香蕉反馈**：查看未读结果时收集香蕉，提供轻量弹跳与收获反馈。
+- **Token 活跃度**：圆形香蕉金币从余额处向上飘出，速率越高节奏越快；额度从绿到黄到红。
+- **接入自己的 Codex**：读取当前系统用户的本机任务，无需作者账号或额外绑定表单。
 
-The board prioritizes unread results. Recent activity covers a rolling 24 hours, and history covers the previous 24 hours to 7 days. Weekly remaining quota is informational; unavailable observations display as unavailable. Token rate is measured throughput, not remaining budget or completion percentage.
+金币是活跃度提示，一枚金币不代表固定 Token 数或费用。周额度保持 Codex 返回的真实百分比，Monkex 不估算剩余 Token 总数。在 Codex 内打开任务后的已读同步依赖当前本地记录格式，不兼容时保留原状态。
 
-## Privacy and cost
+## 下载与安装
 
-The packaged application starts a loopback-only observer on `127.0.0.1:8766`. It reads this user's Codex task metadata, recent conversation context and runtime records to show status. Read receipts are stored in the OS application-data directory for `com.zin.work-twin`. No training database, author's conversations, account credentials, or development prototype is included.
+新版 **0.1.1 Preview** 正在准备发行。以 [Releases 页面](https://github.com/zxzin/Monkex/releases)实际可见的公开附件为准；草稿不是公开下载。
 
-AI summaries are **off by default in installers**. Existing task/progress text remains available. Setting `MONKEX_AI_SUMMARIES=1` before launch opts into sending recent task context through the user's configured Codex service for short summaries; this consumes that account's quota and follows its configured provider's data policy. Monkex itself has no analytics or remote upload service. Codex authentication stays with Codex.
+| 电脑 | 对应附件 | 安装 |
+| --- | --- | --- |
+| Mac · Apple Silicon（M系列） | Monkex-macOS-arm64.zip | 解压，将 Monkex.app 放到用户或系统“应用程序”目录 |
+| Windows 10/11 · x64 | Monkex-Windows-x64-setup.exe | 双击安装到当前用户，按提示补齐 WebView2 |
+| Intel Mac / Windows ARM64 / Linux | 暂无对应包 | 暂停安装，关注后续版本 |
 
-Missing Codex or a failed sync leaves the board visible with installation/sync guidance. A Windows URL launch confirms dispatch to the OS, not that Codex has visibly selected the conversation; this limitation is part of the pending Windows acceptance test.
+**先安装并登录 Codex，再启动 Monkex。** 安装包内置后端，普通用户无需 Python、Node.js 或 Rust。
 
-## Build from source
+把下面这段话发给拥有本机操作权限的 Codex，即可让它选择版本并协助安装：
 
-Install Python 3.11+, Node.js 22, Rust stable and the platform prerequisites from [Tauri](https://v2.tauri.app/start/prerequisites/).
+~~~text
+请帮我安装 Monkex：https://github.com/zxzin/Monkex 。
+先读取仓库 README、INSTALL_WITH_CODEX.md 和公开 Releases，识别本机系统及 CPU 架构，下载对应的最新公开安装包（可选 Preview），核验 SHA256，保留已有用户数据并安装。
+检查并连接我自己的本机 Codex。没有匹配包时暂停说明，不默认源码编译。不读取或上传凭据，不修改 Codex 配置，不自动启用 AI 总结。遇到未签名/未公证警告、登录或管理员授权时先解释并让我确认，不关闭系统安全保护。
+最后报告安装版本、路径、启动方式和实际验证结果。
+~~~
 
-```sh
+[完整中英文提示词](INSTALL_WITH_CODEX.md)。系统安全确认、Codex 登录等步骤仍由用户完成。
+
+### 预览版限制
+
+- macOS 采用本地 ad-hoc 签名，**未经过 Apple 公证**；Windows **没有发行者签名**，可能出现系统安全提示。核验来源和哈希后由用户决定是否继续，保留系统安全保护。
+- 平台测试范围和 SHA256 以对应 Release 为准。Windows CI 安装/窗口/离线启动通过，不等于真实已登录 Codex 的完整集成验收。
+- Codex 需要支持本机 app-server 和 codex://threads/… URL 协议。非标准路径可设置 MONKEX_CODEX_PATH，详见安装文档。
+- 当前无自动更新、开机自启或云同步。
+
+## 使用
+
+启动 Codex → 启动 Monkex → 点击香蕉树展开 → 点击任务回到原对话。图钉决定跳转后保持展开或收起；右键树可以退出，猴子头像里保留搜索与动效设置。
+
+Monkex 只观察、记录已读并导航。新建任务、回复、审批和执行始终在 Codex 内完成。
+
+## 隐私与额度
+
+后端仅监听 127.0.0.1:8766，读取当前用户 Codex 的任务元数据、近期上下文与运行记录。Monkex 已读记录保存在系统应用数据目录。安装包不包含作者任务、训练数据、凭据或开发原型。
+
+它遵循现有 CODEX_HOME。若多个 Codex 账号共享同一系统用户或历史目录，Monkex 不按云账号二次拆分；它是本机目录级接入，不是跨账号云同步。
+
+**安装版默认关闭 AI 总结。** 主动设置 MONKEX_AI_SUMMARIES=1 才会将近期上下文交给你的 Codex 服务生成摘要，消耗你自己的额度，并遵循该服务的数据政策。Monkex 自身无分析埋点或远程上传服务，登录由 Codex 管理。
+
+## 开发者构建
+
+普通用户下载发行附件即可。开发者需 Python 3.11+、Node.js 22、Rust stable 和 [Tauri 平台依赖](https://v2.tauri.app/start/prerequisites/)。
+
+~~~sh
 python -m venv .venv
-# Activate .venv for your shell, then:
+# 激活虚拟环境后：
 python -m pip install pyinstaller==6.19.0
 npm ci --prefix desktop_shell
 python scripts/build_monkex_release.py
 cd desktop_shell
 npx tauri build --config src-tauri/tauri.release.conf.json --bundles nsis
-# On macOS use --bundles app (or dmg) instead.
-```
+# macOS 将 nsis 改为 app，回到仓库根目录后运行：
+# python scripts/finalize_monkex_macos.py
+~~~
 
-For the ad-hoc macOS preview, build `--bundles app`, return to the repository root, and run `python scripts/finalize_monkex_macos.py` before archiving the `.app`. This signs and tests the exact bundled sidecar. Its Python interpreter requires a scoped library-validation exception while embedded libraries are ad-hoc signed; the main UI keeps library validation. Retire this exception once the interpreter/extensions share a verified publisher identity.
-
-The build embeds a Python sidecar and only the curated runtime assets. End users do not need Python, Node, Rust or this source checkout. Packaging is described by the [Tauri sidecar](https://v2.tauri.app/develop/sidecar/) and [Windows installer](https://v2.tauri.app/distribute/windows-installer/) documentation.
-
-No paid signing/notarization service or publisher certificate has been configured. Unsigned Windows builds can trigger SmartScreen; the macOS build uses local ad-hoc signing and is not notarized. Do not disable OS security globally. Public release remains gated on the documented platform checks.
-
-## Scope
-
-Observation, read receipts and navigation only. New tasks, replies and approvals remain in Codex. Historical training/execution systems are not shipped. No auto-update or auto-start is installed.
+macOS 流程包含嵌套代码签名与隔离后端测试。Python sidecar 当前需要有范围的 library-validation 例外，主 UI 保留校验；统一发行者签名完成后再移除此兼容层。
 
 ## Rights
 
-Copyright © 2026 Monkex contributors. This repository is source-available; no general open-source license is granted. You may download and run the released application for personal use. Codex and OpenAI names belong to their respective owners. Character artwork was generated with ImageGen.
+Copyright © 2026 Monkex contributors. Source-available; no general open-source license is granted. You may download and run released applications for personal use. Codex and OpenAI names belong to their respective owners. Character and coin artwork was generated with ImageGen.

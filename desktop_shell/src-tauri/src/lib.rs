@@ -347,6 +347,13 @@ pub fn run() {
             fx.set_ignore_cursor_events(true)?;
             let tracking = window.clone();
             window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    // Main-window close owns the application lifecycle, including
+                    // the visual-only window and the observer's process tree.
+                    api.prevent_close();
+                    tracking.app_handle().exit(0);
+                    return;
+                }
                 if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }) {
                     let _ = sync_quota_effect(&tracking);
                 }
