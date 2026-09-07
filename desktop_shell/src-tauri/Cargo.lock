@@ -4482,6 +4482,7 @@ dependencies = [
 name = "zinx-work-twin"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "tauri",
  "tauri-build",
 ]

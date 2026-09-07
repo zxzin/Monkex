@@ -30,3 +30,7 @@ try {
     if (!$process.WaitForExit(5000)) { Stop-Process -Id $process.Id -Force }
   }
 }
+$leaked = $false
+try { $null = Invoke-RestMethod http://127.0.0.1:8766/api/health -TimeoutSec 2; $leaked = $true } catch {}
+if ($leaked) { throw 'Backend remained alive after application exit' }
+Write-Output 'PASS: exit releases the owned backend and loopback port'

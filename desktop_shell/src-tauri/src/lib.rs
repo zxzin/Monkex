@@ -27,12 +27,36 @@ impl BackendProcess {
         let Ok(mut child) = self.0.lock() else {
             return;
         };
-        let Some(mut process) = child.take() else {
+        let Some(process) = child.take() else {
             return;
         };
-        let _ = process.kill();
-        let _ = process.wait();
+        stop_backend_process(process);
     }
+}
+
+fn stop_backend_process(mut process: Child) {
+    #[cfg(unix)]
+    {
+        // Each backend is spawned in its own process group. Include PyInstaller's
+        // worker and the observer's Codex children, while leaving the user's app alone.
+        let group = -(process.id() as i32);
+        unsafe { libc::kill(group, libc::SIGTERM); }
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < deadline {
+            if matches!(process.try_wait(), Ok(Some(_))) { break; }
+            thread::sleep(Duration::from_millis(50));
+        }
+        unsafe { libc::kill(group, libc::SIGKILL); }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = Command::new("taskkill.exe")
+            .args(["/PID", &process.id().to_string(), "/T", "/F"])
+            .creation_flags(0x08000000).output();
+    }
+    let _ = process.kill();
+    let _ = process.wait();
 }
 
 fn compact_height(height: Option<f64>) -> f64 {
@@ -144,6 +168,11 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Option<Child>, String> {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
     let mut child = command
         .args(["--port", "8766"])
         .env("PYTHONDONTWRITEBYTECODE", "1")
@@ -171,8 +200,7 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Option<Child>, String> {
         }
         thread::sleep(Duration::from_millis(100));
     }
-    let _ = child.kill();
-    let _ = child.wait();
+    stop_backend_process(child);
     Err(format!(
         "Monkex 后端启动超时，日志：{}",
         log_path.display()
