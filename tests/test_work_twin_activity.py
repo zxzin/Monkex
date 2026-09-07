@@ -145,10 +145,10 @@ class ActivityTests(unittest.TestCase):
         self.assertFalse(any(m == "turn/start" for m, _ in self.client.calls))
 
     def test_codex_jump_uses_exact_target_without_resuming(self):
-        with mock.patch("twin_shell.orchestrator.subprocess.run") as run:
+        with mock.patch("twin_shell.orchestrator.open_codex_thread") as run:
             result=self.shell.open_thread("thread-0")
         self.assertTrue(result["ok"])
-        self.assertEqual(run.call_args.args[0],["open","codex://threads/thread-0"])
+        run.assert_called_once_with("thread-0")
         self.assertFalse(any(m in {"turn/start","thread/resume"} for m, _ in self.client.calls))
         with self.assertRaises(WorkTwinShellError):
             self.shell.open_thread("thread-0?other=1")

@@ -11,4 +11,5 @@ data/
 desktop_shell/src-tauri/binaries/
 desktop_shell/src-tauri/release-web/
 desktop_shell/src-tauri/gen/
-.zinxlaunch/qa/
+.zinxlaunch/
+artifacts/
