@@ -5,6 +5,9 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: monkex-build-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   package:
     strategy:
@@ -43,6 +46,10 @@ jobs:
       - run: python scripts/smoke_monkex_backend.py "${{ matrix.binary }}" desktop_shell/src-tauri/release-web
       - working-directory: desktop_shell
         run: npx tauri build --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundle }}
+      - name: Install and launch Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/smoke_monkex_windows.ps1
       - name: Archive macOS app preserving permissions
         if: runner.os == 'macOS'
         run: |

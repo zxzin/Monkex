@@ -138,7 +138,7 @@ function updateTaskRow(button,card) {
   const copy=node("div","task-copy"),title=node("div","task-title-line");
   title.append(node("strong","",card.name));
   title.append(node("span","row-status",shortStatus(card)));
-  const meta=node("div","task-meta"),brief=node("span",card.task_brief?"stage ai-brief":"stage",card.task_brief||card.project_label||"任务");
+  const meta=node("div","task-meta"),brief=node("span",card.task_brief?"stage ai-brief":"stage",card.task_brief||card.summary||card.project_label||"任务");
   brief.title=briefExplanation(card);meta.append(brief);
   if(status==="running"){
     const speed=node("span","row-rate");speed.title="当前任务 · 近 60 秒 Token 消耗速度，含输入与输出";
@@ -149,6 +149,7 @@ function updateTaskRow(button,card) {
 }
 function briefExplanation(card) {
   if(card.task_brief)return "AI 摘要 · "+(card.brief_status==="ready"?"依据近期对话":"上次摘要，等待更新")+"\n"+card.task_brief;
+  if(card.summary)return "最近进展 · "+card.summary;
   return {pending:"正在概括近期对话",insufficient:"对话信息不足，暂时保留原任务名",unavailable:"AI 摘要暂不可用，稍后重试"}[card.brief_status]||"";
 }
 async function api(path, body) {

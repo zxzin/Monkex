@@ -1,7 +1,7 @@
 {
   "shell/index.html": "321efba0a1d2e88f360d0a8ac1f361b05b00745313b2b3d00c1fe6a6f6dc03c2",
   "shell/styles.css": "0c892a691c3a5610d5fb9176984a6ddb465c860b8db78322b7ce719a303fba13",
-  "shell/app.js": "fedb62c3af3f33f17ad719c8d2447f42b2b2e94454016b6aa26d8cba2711d2d1",
+  "shell/app.js": "b3518514e2dbadb607bc4b2b5f19e7c1cab2f91312cc94d4eabfd89458e174f3",
   "shell/banana-tree.js": "41e721e9712f49ef0cce1fb6245859e1aad17454e40a00db38054d0ce5fb556b",
   "shell/read-play.js": "9bf424252e3e7a6c351b71e706530707d0bee5784ffe3e40ad5778de1b78de0d",
   "shell/task-navigation.js": "58eab2b4e3c04e690032315b2cf7450f01cfc9ddf36a57531531b885590141b3",
@@ -14,6 +14,7 @@
   "scripts/work_twin_shell.py": "34d14ad40e9687fde864eaebfefbc096abb4459006359eadf5bb3f6b217f3fb3",
   "scripts/build_monkex_release.py": "66f734fdcc6831651022a5265a08e885e762697549a0e07390a329424eabc3bb",
   "scripts/smoke_monkex_backend.py": "791e94f7c7ccf90ac90893d435e18c07e37003925b1c326f8b2983e3aaf645c2",
+  "scripts/smoke_monkex_windows.ps1": "7452c8127ee4c2bc12744c747ba81d57a8114ed7c9288803cd5b7e77d25e37a5",
   "scripts/finalize_monkex_macos.py": "09041da85cb20ec9f9ef0cc14632819da24a3b2fafbe811c968de77721398e9c",
   "desktop_shell/src-tauri/backend-entitlements.plist": "54b2ec6347872bf62fd1c070eaa748ca8de1c13d584bcf71787a63ebb84a052c",
   "desktop_shell/package.json": "4a323b8b571c5cb34f1e3c747a9c7ee3a805333b2589daae15f327e4df475d9c",
