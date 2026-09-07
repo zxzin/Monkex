@@ -54,7 +54,11 @@ def main():
                 assert error.code == 404
             print("PASS: packaged backend, isolated empty state, missing-Codex guidance, static UI, origin rejection, prototype exclusion")
         finally:
-            process.terminate()
+            if os.name == "nt":
+                subprocess.run(["taskkill.exe", "/PID", str(process.pid), "/T", "/F"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            else:
+                process.terminate()
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
