@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB_FILES = ["index.html", "styles.css", "app.js", "banana-tree.js", "read-play.js", "task-navigation.js",
+WEB_FILES = ["index.html", "coin-overlay.html", "styles.css", "app.js", "banana-tree.js", "read-play.js", "task-navigation.js",
     "assets/monkey-banana-2026-09-07/banana-tree.png",
     "assets/monkey-banana-2026-09-07/gold-chain-monkey.png",
     "assets/monkey-banana-2026-09-07/pixel-banana-v4-diagonal.png",

@@ -223,7 +223,7 @@ function weeklyQuotaState(usage,now=Date.now()/1000) {
     (usage.resets_at==null||usage.resets_at>now);
   if(!valid)return {label:"—",state:"unknown"};
   const remaining=Math.max(0,Math.min(100,usage.remaining_percent));
-  return {label:String(Math.round(remaining*10)/10)+"%",state:remaining<=20?"low":"normal",remaining};
+  return {label:String(Math.round(remaining*10)/10)+"%",state:remaining<=20?"low":remaining<=50?"medium":"normal",remaining};
 }
 function renderQuotaFlow(element,cards,quota) {
   // Coins express the observed rolling Token rate; one coin has no billing value.
@@ -237,6 +237,14 @@ function renderQuotaFlow(element,cards,quota) {
   element.style.setProperty('--coin-period',(rate>0?Math.max(.9,3.2/(1+Math.sqrt(rate/100000))):3.2)+'s');
   const description=rate>0?' · 运行任务近60秒 Token 速率合计 '+Math.round(rate).toLocaleString()+' /min · 金币速度表示活跃度，不代表逐枚扣费':' · 当前无已观测的 Token 消耗';
   element.title+=description;
+  syncNativeQuotaEffect(element,rate,quota);
+}
+function syncNativeQuotaEffect(element,rate,quota) {
+  if(!window.__TAURI__)return;
+  const number=$("weeklyRemaining").getBoundingClientRect();
+  const active=rate>0&&quota.state!=='unknown'&&state.mode==='compact'&&!document.hidden&&!prefersReducedMotion();
+  invokeDesktop('set_quota_effect',{active,period:Number.parseFloat(element.style.getPropertyValue('--coin-period'))||3.2,anchorX:number.left+number.width/2,anchorY:number.top})
+    .then(()=>element.dataset.nativeCoins='true').catch(()=>element.dataset.nativeCoins='false');
 }
 function activityTime(card) {
   const seconds=value=>typeof value==="number"?value:typeof value==="string"?Date.parse(value)/1000:NaN;
@@ -387,7 +395,8 @@ function bind() {
 async function init() {
   if(state.petMode)document.documentElement.classList.add("pet-mode");
   const visibility=()=>{document.documentElement.dataset.pageHidden=String(document.hidden);};
-  visibility();document.addEventListener("visibilitychange",visibility);
+  visibility();document.addEventListener("visibilitychange",()=>{visibility();updateCounts();});
+  window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',updateCounts);
   window.addEventListener("pagehide",()=>{document.documentElement.dataset.pageHidden="true";});
   bind();
   window.addEventListener("pagehide",stopPetInteraction);

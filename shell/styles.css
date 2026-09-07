@@ -43,6 +43,8 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .weekly-quota strong{font:750 11px/1 var(--hud-font);font-variant-numeric:tabular-nums;color:var(--green-ink)}
 .weekly-quota[data-state=low]{background:var(--red-soft);box-shadow:inset 0 0 0 1px #f6d8d3}
 .weekly-quota[data-state=low] strong{color:var(--red-ink)}
+.weekly-quota[data-state=medium]{background:var(--yellow-soft)}
+.weekly-quota[data-state=medium] strong{color:var(--yellow-ink)}
 .weekly-quota[data-state=unknown]{background:var(--sage-soft);box-shadow:inset 0 0 0 1px var(--line)}
 .weekly-quota[data-state=unknown] strong{color:var(--muted)}
 .icon-button{width:26px;height:28px;border-radius:9px;font-size:21px;flex:none;color:var(--muted)}
@@ -319,10 +321,16 @@ html[data-page-hidden=true] :is(.tree-canopy,.tree-harvest,.tree-growth),.pet-mo
 .pet-quota::after{content:"";position:absolute;top:0;left:7px;right:7px;height:1px;background:#675432;pointer-events:none}
 .pet-quota strong{font:760 10px/1 var(--hud-font);font-variant-numeric:tabular-nums;color:var(--green-ink)}
 .pet-quota[data-state=low] strong{color:var(--red-ink)}
+.pet-quota[data-state=medium] strong{color:var(--yellow-ink)}
 .pet-quota[data-state=unknown] strong{color:var(--muted)}
 .quota-number{position:relative;display:inline-block}
 .quota-coins{position:absolute;left:50%;top:0;width:0;height:0;pointer-events:none;z-index:2}
-.quota-coins i{position:absolute;left:-6px;top:-4px;width:12px;height:12px;background:url('/shell/assets/monkex-coins-2026-09-07/banana-coin-v1.png') center/contain no-repeat;image-rendering:pixelated;opacity:0;transform-origin:center}
+.quota-coins i{position:absolute;left:-8px;top:-6px;width:16px;height:16px;background:url('/shell/assets/monkex-coins-2026-09-07/banana-coin-v1.png') center/contain no-repeat;image-rendering:pixelated;opacity:0;transform-origin:center}
+.weekly-quota[data-native-coins=true] .quota-coins{visibility:hidden}
+html.coin-overlay,html.coin-overlay body{margin:0;min-width:0;width:96px;height:64px;background:transparent;overflow:hidden;pointer-events:none}
+.coin-overlay .quota-coins{left:48px;top:58px}
+.coin-overlay[data-flowing=true] .quota-coins i{animation-name:quota-coin-overflow}
+@keyframes quota-coin-overflow{0%{opacity:0;transform:translate(0,0) scale(.65) rotate(-8deg)}12%{opacity:1;transform:translate(-2px,-12px) scale(1) rotate(0)}38%{opacity:1;transform:translate(-10px,-30px) scale(1) rotate(10deg)}62%{opacity:.8;transform:translate(-23px,-43px) scale(.8) rotate(20deg)}85%,100%{opacity:0;transform:translate(-35px,-50px) scale(.35) rotate(30deg)}}
 [data-flowing=true] .quota-coins i{animation:quota-coin-spend var(--coin-period,2s) linear infinite}
 [data-flowing=true] .quota-coins i:nth-child(2){animation-delay:calc(var(--coin-period,2s) * -.333)}
 [data-flowing=true] .quota-coins i:nth-child(3){animation-delay:calc(var(--coin-period,2s) * -.666)}

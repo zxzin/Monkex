@@ -18,6 +18,10 @@ assert.match($('petLauncher')['aria-label'],/2 根香蕉待收.*1 项任务进�
 unread=0;verify('68%','normal');assert.equal($('petCharacter').dataset.running,'true');assert.equal($('petGrowth').dataset.count,'1');
 running=0;verify('68%','normal');assert.equal($('petCharacter').dataset.running,'false');assert.equal($('petGrowth').dataset.count,'0');
 state.weeklyUsage.remaining_percent=0;verify('0%','low');
+state.weeklyUsage.remaining_percent=20;verify('20%','low');
+state.weeklyUsage.remaining_percent=20.1;verify('20.1%','medium');
+state.weeklyUsage.remaining_percent=50;verify('50%','medium');
+state.weeklyUsage.remaining_percent=50.1;verify('50.1%','normal');
 state.weeklyUsage.remaining_percent=100;verify('100%','normal');
 state.weeklyUsage.remaining_percent=68;state.weeklyUsage.observed_at=now-91;verify('—','unknown');
 state.weeklyUsage.observed_at=now;state.weeklyUsage.resets_at=now-1;verify('—','unknown');
@@ -56,7 +60,14 @@ assert.match(css,/@media\(prefers-reduced-motion:reduce\)\{\[data-flowing=true\]
 assert.match(html,/id="petQuota"[^>]*><span>周余<\/span><strong id="petQuotaRemaining">—<\/strong><\/span>/);
 for(const removed of ['quota-meter','quota-fill','quota-spent','quota-delta','renderQuotaMeter'])assert.ok(!(html+css+source).includes(removed),'remove obsolete progress bar '+removed);
 assert.match(html,/class="quota-number"><strong id="weeklyRemaining">—<\/strong><span class="quota-coins"/,'coins originate at the actual quota number');
-assert.match(css,/width:12px;height:12px;background:url\('\/shell\/assets\/monkex-coins-2026-09-07\/banana-coin-v1.png'\)/,'round ImageGen sprite retains square aspect');
+assert.match(css,/width:16px;height:16px;background:url\('\/shell\/assets\/monkex-coins-2026-09-07\/banana-coin-v1.png'\)/,'larger round ImageGen sprite retains square aspect');
+for(const target of ['weekly-quota','pet-quota'])assert.ok(css.includes('.'+target+'[data-state=medium] strong{color:var(--yellow-ink)}'));
+const native=read('desktop_shell/src-tauri/src/lib.rs');
+assert.match(native,/fx\.set_ignore_cursor_events\(true\)/,'native overlay passes all clicks through');
+assert.match(native,/\.focused\(false\)\.focusable\(false\)\.visible\(false\)/,'effect cannot focus or show before telemetry');
+assert.match(native,/"quota-fx"/);assert.match(native,/const COMPACT_WIDTH: f64 = 344\.0/,'board hit width unchanged');
+assert.match(css,/\.coin-overlay \.quota-coins\{left:48px;top:58px\}/,'overlay anchor matches native offset');
+assert.ok(!read('shell/coin-overlay.html').includes('<script'),'effect has no independent telemetry or privileged script');
 assert.ok(fs.existsSync(path.join(root,'shell/assets/monkex-coins-2026-09-07/banana-coin-v1.png')));
 assert.match(read('scripts/build_monkex_release.py'),/monkex-coins-2026-09-07\/banana-coin-v1.png/,'packaged resource allowlist includes coin');
 assert.match(css,/\.pet-quota\s*\{[^}]*height: 14px;/,'lower planter rim two pixels while keeping its base inside the launcher');

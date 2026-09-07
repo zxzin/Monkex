@@ -15,6 +15,7 @@
     "core:window:allow-start-dragging",
     "allow-set-pet-view",
     "allow-start-window-drag",
-    "allow-show-pet-menu"
+    "allow-show-pet-menu",
+    "allow-set-quota-effect"
   ]
 }

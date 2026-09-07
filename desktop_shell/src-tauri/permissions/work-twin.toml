@@ -7,3 +7,8 @@ commands.allow = ["start_window_drag"]
 identifier = "allow-show-pet-menu"
 description = "Allows the local work twin page to open its own native context menu."
 commands.allow = ["show_pet_menu"]
+
+[[permission]]
+identifier = "allow-set-quota-effect"
+description = "Updates a non-interactive local quota-coin effect window."
+commands.allow = ["set_quota_effect"]
