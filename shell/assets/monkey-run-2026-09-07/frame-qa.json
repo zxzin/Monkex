@@ -1,0 +1,41 @@
+{
+  "source": "ImageGen four-frame anchored contact sheet",
+  "frame_size": [
+    355,
+    460
+  ],
+  "anchor": [
+    154,
+    -51
+  ],
+  "atlas_size": [
+    256,
+    64
+  ],
+  "frames": [
+    {
+      "frame": 1,
+      "removed_key_pixels": 3626,
+      "marker_pixels": 0,
+      "key_pixels": 0
+    },
+    {
+      "frame": 2,
+      "removed_key_pixels": 3749,
+      "marker_pixels": 0,
+      "key_pixels": 0
+    },
+    {
+      "frame": 3,
+      "removed_key_pixels": 3742,
+      "marker_pixels": 0,
+      "key_pixels": 0
+    },
+    {
+      "frame": 4,
+      "removed_key_pixels": 2658,
+      "marker_pixels": 0,
+      "key_pixels": 0
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light"><title>Monkex</title>
+  <link rel="stylesheet" href="/shell/styles.css">
+</head>
+<body>
+  <section id="petShell" class="pet-shell" aria-label="Monkex" hidden>
+    <div id="petDragHandle" class="pet-drag-handle" title="拖动"><i></i></div>
+    <button id="petLauncher" class="pet-launcher" type="button" aria-label="展开任务动态">
+      <span class="pet-tree-stage" aria-hidden="true">
+      <span id="petCharacter" class="pet-character banana-tree-art" data-frame="idle" aria-hidden="true">
+        <img src="/shell/assets/monkey-banana-2026-09-07/banana-tree.png" alt="">
+        <span class="tree-canopy">
+        <span class="tree-companion"><span class="tree-monkey-sprite"></span></span>
+        <span id="petGrowth" class="tree-growth" aria-hidden="true"><i class="tree-green-fruit" hidden></i><i class="tree-green-fruit" hidden></i><i class="tree-green-fruit" hidden></i></span>
+        <span id="petHarvest" class="tree-harvest" aria-hidden="true"><i class="tree-fruit" hidden></i><i class="tree-fruit" hidden></i><i class="tree-fruit" hidden></i><i class="tree-fruit" hidden></i><i class="tree-fruit" hidden></i></span>
+        </span>
+      </span>
+      </span>
+      <span id="petQuota" class="pet-quota" data-state="unknown"><span>周余</span><strong id="petQuotaRemaining">—</strong></span>
+    </button>
+  </section>
+  <main class="app-shell" id="appShell">
+    <header class="topbar">
+      <button id="greetMonkey" class="brand-pet" type="button" aria-label="看板设置" aria-expanded="false" aria-controls="boardSettings" title="看板设置 · 搜索与收香蕉动效"><span id="brandMonkey" class="monkey-art" data-frame="idle" aria-hidden="true"><img src="/shell/assets/monkey-banana-2026-09-07/gold-chain-monkey.png" alt=""></span></button>
+      <div class="heading" id="dragArea"><h1><span id="viewHeading" title="Monkex · Codex 进度看板">Monkex</span><i id="connectionDot" class="connection-dot" title="正在连接" aria-label="正在连接"></i></h1><span id="connectionText" class="sr-only">正在连接 Codex</span></div>
+      <span id="weeklyQuota" class="weekly-quota" title="周订阅额度待同步"><span>周剩余</span><strong id="weeklyRemaining">—</strong></span>
+      <button id="pinButton" class="pin-button" type="button" aria-pressed="false" aria-label="钉住看板" title="钉住看板"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="pin-shadow" d="M5 21h14" /><g class="pin-art"><path class="pin-needle" d="M12 14v7"/><path class="pin-head" d="M8 3h8v3l-1 1v4l3 3v2H6v-2l3-3V7L8 6z"/><path class="pin-glint" d="M10 5h3"/></g></svg></button>
+      <button id="collapseButton" class="icon-button" type="button" aria-label="收成香蕉树" title="收成香蕉树"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg></button>
+    </header>
+    <section id="boardSettings" class="board-settings" aria-label="看板设置" hidden>
+      <label for="searchInput">搜索任务</label>
+      <input id="searchInput" type="search" aria-label="搜索当前时间范围的任务" placeholder="搜任务、项目或摘要">
+      <button id="playFeedbackToggle" class="feedback-setting" type="button" aria-pressed="true"><span>收香蕉动效</span><i class="switch-track" aria-hidden="true"></i></button>
+    </section>
+    <div id="systemBanner" class="system-banner" role="status" hidden></div>
+    <section id="feedView" class="feed-view" aria-label="跨项目任务动态">
+      <nav class="filters" aria-label="任务筛选">
+        <button data-filter="board" class="filter active" aria-pressed="true" title="近24小时未读在前，全部进行中在后">看板 <span id="boardCount">0</span></button>
+        <button data-filter="recent" class="filter" aria-pressed="false" title="近24小时未读在前、已读其次、进行中在后；组内按最近活动排序">近24小时 <span id="recentCount">0</span></button>
+        <button data-filter="history" class="filter" aria-pressed="false" title="最后活动在24小时前、7天以内的任务">历史7天 <span id="historyCount">0</span></button>
+      </nav>
+      <div id="taskList" class="task-list" aria-label="任务列表"><p class="empty-note">正在读取最近任务…</p></div>
+      <span id="syncLabel" class="sr-only" aria-live="off"></span>
+    </section>
+    <div id="readPlayLayer" class="read-play-layer" aria-hidden="true"></div>
+    <div id="readPlayToast" class="read-play-toast" role="status" aria-live="polite" hidden></div>
+  </main>
+  <script src="/shell/banana-tree.js" defer></script>
+  <script src="/shell/read-play.js" defer></script>
+  <script src="/shell/task-navigation.js" defer></script>
+  <script src="/shell/app.js" defer></script>
+</body>
+</html>

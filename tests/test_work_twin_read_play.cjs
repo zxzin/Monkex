@@ -1,0 +1,92 @@
+// Receipt-bound banana feedback stays independent of task execution.
+const assert=require('node:assert/strict');
+const {ReadPlayLedger,ReadPlay}=require('../shell/read-play.js');
+const card=(id='a',version='v1')=>({id,unread:true,status:'idle',pending_result_version:version});
+const receipt=(threadId='a',version='v1')=>({threadId,version});
+const ledger=new ReadPlayLedger();
+assert.equal(ledger.confirm(receipt(),card(),1000),null,'background receipt gives no reward');
+for(const value of [null,{...card(),unread:false},{...card(),status:'running'},{...card(),pending_result_version:null}])assert.equal(ledger.arm(value,1000),false);
+assert.equal(ledger.arm(card(),1000),true);
+assert.equal(ledger.confirm(receipt('a','old'),card(),1100),null);
+assert.deepEqual(ledger.confirm(receipt(),card(),1200),{combo:1});
+ledger.arm(card(),1500);assert.equal(ledger.confirm(receipt(),card(),1600),null,'duplicate version');
+ledger.arm(card('b'),1700);assert.deepEqual(ledger.confirm(receipt('b'),card('b'),1800),{combo:2});
+ledger.arm(card('c'),50000);assert.deepEqual(ledger.confirm(receipt('c'),card('c'),50100),{combo:1});
+for(const [target,now] of [[card('wrong'),51000],[{...card(),status:'running'},51000],[card('a','v2'),51000],[card(),120001]]){
+  const l=new ReadPlayLedger();l.arm(card(),51000);assert.equal(l.confirm(receipt(),target,now),null);
+}
+const canceled=new ReadPlayLedger();canceled.arm(card(),1);canceled.cancel('a');assert.equal(canceled.confirm(receipt(),card(),2),null);
+const bounded=new ReadPlayLedger();for(let i=0;i<300;i++){bounded.arm(card(String(i)),1000+i);bounded.confirm(receipt(String(i)),card(String(i)),1000+i);}assert.equal(bounded.seen.size,256);
+
+let now=1000,reduced=false,celebrations=0,id=0;
+const timers=new Map(),frames=[];
+global.setTimeout=(fn,ms)=>{timers.set(++id,{fn,ms});return id;};
+global.clearTimeout=id=>timers.delete(id);
+global.requestAnimationFrame=fn=>frames.push(fn);
+global.matchMedia=()=>({get matches(){return reduced;},addEventListener(){},removeEventListener(){}});
+function element(rect={left:0,top:0,width:344,height:420,bottom:420}){
+  return {dataset:{},hidden:false,children:[],textContent:'',style:{setProperty(k,v){this[k]=v;}},setAttribute(k,v){this[k]=v;},replaceChildren(){this.children=[];},append(child){child.parent=this;this.children.push(child);},remove(){if(this.parent)this.parent.children=this.parent.children.filter(child=>child!==this);},getBoundingClientRect:()=>rect};
+}
+const descendants=root=>root.children.flatMap(child=>[child,...descendants(child)]);
+function runDelay(ms){for(const [timer,t] of [...timers])if(t.ms===ms){timers.delete(timer);t.fn();}}
+const elements=new Map(['appShell','readPlayLayer','readPlayToast','playFeedbackToggle','greetMonkey'].map(id=>[id,element()]));
+elements.set('greetMonkey',element({left:12,top:10,width:34,height:34,bottom:44}));
+const row=element({left:8,top:100,width:328,height:40,bottom:140});row.dataset={threadId:'a',status:'unread'};
+row.querySelector=selector=>selector==='.task-state'?element({left:16,top:105,width:11,height:16,bottom:121}):null;
+let animationCalls=0;
+const sibling=element({left:8,top:140,width:328,height:40,bottom:180});sibling.dataset={threadId:'b',status:'unread'};sibling.isConnected=true;sibling.animate=()=>{animationCalls++;return {cancel(){},finished:Promise.resolve()};};
+sibling.querySelector=()=>null;
+const listeners=new Map();
+const doc={hidden:false,getElementById:id=>elements.get(id),querySelectorAll:()=>[row,sibling],createElement:()=>element(),addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
+const writes=[];
+const context={connected:true,mode:'compact',filter:'board',unreadRemaining:1};
+const play=new ReadPlay({getContext:()=>context,document:doc,storage:{getItem:()=>null,setItem:(...args)=>writes.push(args)},clock:()=>now,celebrate:()=>celebrations++});
+const toast=elements.get('readPlayToast'),layer=elements.get('readPlayLayer');
+toast.hidden=true;
+play.arm(card());now+=100;play.confirm(receipt(),card());
+assert.equal(toast.hidden,true,'arrival receipt waits for the banana');assert.equal(play.collected,1);assert.equal(play.landed,0);assert.equal(play.pocket.hidden,true);
+assert.equal(descendants(layer).filter(x=>x.className==='read-banana').length,1);
+assert.equal(descendants(layer).filter(x=>x.className==='read-score').length,1,'pickup gives immediate +1 feedback');
+const flyingBanana=descendants(layer).find(x=>x.className==='read-banana');
+assert.equal(flyingBanana.style.left,'21.5px','collection follows the actual icon horizontal center');
+assert.equal(flyingBanana.style.top,'113px','collection begins on the title line icon, with no vertical jump');
+assert.equal(celebrations,0,'monkey waits for banana arrival');
+runDelay(740);assert.equal(celebrations,1);assert.equal(play.landed,1);assert.equal(play.pocket.textContent,'1');
+assert.equal(toast.textContent,'香蕉入袋 · 本次 1 根');assert.equal(toast['aria-label'],'已查看结果，香蕉入袋 · 本次 1 根');
+assert.equal(elements.get('greetMonkey').dataset.harvest,'catch');
+runDelay(420);assert.equal(layer.children.length,0);assert.equal(elements.get('greetMonkey').dataset.harvest,undefined);
+play.arm(card());play.confirm(receipt(),card());assert.equal(play.collected,1,'the same receipt cannot refill the pocket');
+for(let i=0;i<6;i++){const c=card('rapid-'+i);play.arm(c);now+=50;play.confirm(receipt(c.id),c);}
+assert.equal(play.collected,7);assert.equal(play.flights.size,4,'rapid input caps active flight groups');
+assert.equal(play.landed,3,'overflow receives static feedback without dropping successful reads');
+assert.equal(layer.children.length,4,'new receipts preserve earlier in-flight bananas');
+runDelay(740);assert.equal(play.landed,7);assert.equal(play.pocket.textContent,'7');assert.match(toast.textContent,/连收 ×7/,'late arrivals retain the current combo');
+runDelay(420);assert.equal(layer.children.length,0);assert.equal(play.flights.size,0);
+const beforeDisable=celebrations;
+play.arm(card('disable'));play.confirm(receipt('disable'),card('disable'));
+play.setEnabled(false);assert.equal(timers.size,0);assert.equal(toast.hidden,true);assert.equal(elements.get('appShell')['data-play'],'false');
+assert.equal(play.pocket.hidden,true);assert.equal(play.landed,8,'canceling visual feedback preserves accepted receipt totals');
+for(const fn of frames.splice(0))fn();assert.equal(animationCalls,0,'canceled frames cannot animate later');
+assert.deepEqual(writes,[['twin-play-feedback','false']],'only a cosmetic preference persists');
+play.arm(card('b'));play.confirm(receipt('b'),card('b'));assert.equal(toast.hidden,true);
+play.setEnabled(true);reduced=true;play.arm(card('b'));now+=100;play.confirm(receipt('b'),card('b'));assert.equal(layer.children.length,0);assert.equal(celebrations,beforeDisable);assert.equal(toast.hidden,false,'reduced motion retains static receipt');assert.equal(play.pocket.textContent,'9');
+play.clear();doc.hidden=true;play.arm(card('c'));play.confirm(receipt('c'),card('c'));assert.equal(toast.hidden,true);
+doc.hidden=false;context.connected=false;play.arm(card('c'));play.confirm(receipt('c'),card('c'));assert.equal(toast.hidden,true);
+context.connected=true;context.unreadRemaining=0;play.arm(card('c'));now+=100;play.confirm(receipt('c'),card('c'));assert.equal(toast.textContent,'收齐啦 · 本次 10 根');
+context.unreadRemaining=2;reduced=false;play.arm(card('hide'));play.confirm(receipt('hide'),card('hide'));assert.equal(layer.children.length,1);
+doc.hidden=true;listeners.get('visibilitychange')();assert.equal(timers.size,0);assert.equal(layer.children.length,0);assert.equal(play.ledger.pending.size,0);assert.equal(play.landed,11);
+doc.hidden=false;play.arm(card('motion'));play.confirm(receipt('motion'),card('motion'));reduced=true;play.onMotion();assert.equal(layer.children.length,0);assert.equal(play.landed,12);
+play.dispose();assert.equal(timers.size,0);assert.equal(play.ledger.pending.size,0);
+assert.equal(listeners.size,0);assert.equal(elements.get('greetMonkey').children.includes(play.pocket),false);
+const fs=require('node:fs'),path=require('node:path');
+const css=fs.readFileSync(path.join(__dirname,'../shell/styles.css'),'utf8');
+const source=fs.readFileSync(path.join(__dirname,'../shell/read-play.js'),'utf8');
+assert.ok(!(css+source).includes('🍌'),'ImageGen asset replaces the platform emoji');
+assert.equal((css.match(/background:var\(--banana-image\) center\/contain no-repeat/g)||[]).length,3,'flying, receipt and tree fruit use the ripe sprite');
+assert.match(css,/\.app-shell\[data-play=true\] \.task-button\[data-status=unread\] \.task-state\{[^}]*--banana-sprite:var\(--banana-image\)/,'unread binds the same ripe sprite through the shared banana renderer');
+assert.match(css,/background:var\(--banana-sprite\) center\/contain no-repeat/);
+const bananaAsset=css.match(/--banana-image:url\('([^']+)'\)/)?.[1];
+assert.ok(bananaAsset?.startsWith('/shell/assets/'),'resolve the active shared sprite');
+const png=fs.readFileSync(path.join(__dirname,'..',bananaAsset));
+assert.equal(png.subarray(1,4).toString(),'PNG');assert.equal(png[25],6,'generated banana retains RGBA transparency');
+console.log('PASS: receipt guards, pickup/arrival/pocket phases, rapid overlapping flights, bounded effects, combo, cancellation, visibility, reduced motion and cosmetic-only storage');

@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-set-pet-view"
+description = "Resize the desktop assistant to its compact board or collapsed tree."
+commands.allow = ["set_pet_view"]

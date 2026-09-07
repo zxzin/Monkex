@@ -1,0 +1,14 @@
+node_modules/
+target/
+build/
+dist/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+data/
+.env*
+desktop_shell/src-tauri/binaries/
+desktop_shell/src-tauri/release-web/
+desktop_shell/src-tauri/gen/
+.zinxlaunch/qa/

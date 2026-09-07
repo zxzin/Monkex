@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-start-window-drag"
+description = "Allows the local work twin page to drag its own desktop window."
+commands.allow = ["start_window_drag"]
+
+[[permission]]
+identifier = "allow-show-pet-menu"
+description = "Allows the local work twin page to open its own native context menu."
+commands.allow = ["show_pet_menu"]

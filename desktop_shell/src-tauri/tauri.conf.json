@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Monkex",
+  "version": "0.1.0",
+  "identifier": "com.zin.work-twin",
+  "build": {
+    "frontendDist": "../../shell"
+  },
+  "bundle": {
+    "active": false,
+    "macOS": {
+      "signingIdentity": "-"
+    },
+    "icon": [
+      "icons/monkex-giant-banana-v2/icon.icns",
+      "icons/monkex-giant-banana-v2/icon.ico",
+      "icons/monkex-giant-banana-v2/32x32.png",
+      "icons/monkex-giant-banana-v2/128x128.png",
+      "icons/monkex-giant-banana-v2/128x128@2x.png"
+    ]
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "url": "http://127.0.0.1:8766/?pet=1",
+        "title": "Monkex",
+        "width": 76,
+        "height": 76,
+        "minWidth": 76,
+        "minHeight": 76,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "acceptFirstMouse": true,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": [
+        "default"
+      ]
+    }
+  }
+}
