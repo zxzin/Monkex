@@ -39,7 +39,7 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .connection-dot{width:5px;height:5px;border-radius:1px;background:var(--red);display:inline-block}
 .connection-dot[data-connected=true]{background:var(--green)}
 .heading>span{font-size:10px;color:var(--muted)}
-.weekly-quota{position:relative;display:flex;gap:4px;align-items:center;font-size:9px;white-space:nowrap;color:var(--muted);flex:none;padding:2px 4px;border-radius:7px;background:transparent;box-shadow:none}
+.weekly-quota{position:relative;display:flex;gap:3px;align-items:center;font-size:9px;white-space:nowrap;color:var(--muted);flex:none;padding:3px 6px;margin-right:5px;border-radius:8px;background:var(--green-soft);box-shadow:none}
 .weekly-quota strong{font:750 11px/1 var(--hud-font);font-variant-numeric:tabular-nums;color:var(--green-ink)}
 .weekly-quota[data-state=low]{background:var(--red-soft);box-shadow:inset 0 0 0 1px #f6d8d3}
 .weekly-quota[data-state=low] strong{color:var(--red-ink)}
@@ -323,7 +323,9 @@ html[data-page-hidden=true] :is(.tree-canopy,.tree-harvest,.tree-growth),.pet-mo
 .pet-quota[data-state=low] strong{color:var(--red-ink)}
 .pet-quota[data-state=medium] strong{color:var(--yellow-ink)}
 .pet-quota[data-state=unknown] strong{color:var(--muted)}
-.quota-coin{display:block;flex:0 0 26px;width:26px;height:26px;object-fit:contain;image-rendering:pixelated;pointer-events:none;animation:quota-coin-turn 12s linear infinite;animation-play-state:paused}
+.quota-coin-button{display:grid;place-items:center;flex:0 0 26px;width:26px;height:26px;padding:0;border-radius:6px;touch-action:manipulation}
+.quota-coin-button:hover:not(:disabled){background:#fff7cf}
+.quota-coin{display:block;width:20px;height:20px;object-fit:contain;image-rendering:pixelated;pointer-events:none;animation:quota-coin-turn 12s linear infinite;animation-play-state:paused}
 .weekly-quota[data-flowing=true] .quota-coin{animation-play-state:running}
 @keyframes quota-coin-turn{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 html[data-page-hidden=true] .quota-coin,.pet-mode[data-mode=collapsed] .quota-coin{animation-play-state:paused}

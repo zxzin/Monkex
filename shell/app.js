@@ -342,7 +342,20 @@ async function selectThread(id) {
   }
   return opened;
 }
+function playQuotaCoin(event) {
+  event.stopPropagation();
+  const button=$("quotaCoinButton");
+  button.getAnimations().forEach(animation=>animation.cancel());
+  const frames=prefersReducedMotion()
+    ? [{backgroundColor:'#ffe48a'},{backgroundColor:'transparent'}]
+    : [{transform:'translateY(0) scale(1)'},{transform:'translateY(1px) scale(.88)',offset:.18},{transform:'translateY(-2px) scale(1.04)',offset:.5},{transform:'translateY(0) scale(1)'}];
+  button.animate(frames,{duration:prefersReducedMotion()?180:420,easing:'ease-out'});
+}
+function stopQuotaCoinFeedback() {
+  $("quotaCoinButton").getAnimations().forEach(animation=>animation.cancel());
+}
 function bind() {
+  $("quotaCoinButton").onclick=playQuotaCoin;
   if(window.WorkTwinReadPlay)state.readPlay=new window.WorkTwinReadPlay({
     getContext:()=>({connected:state.connected,mode:state.mode,filter:state.filter,unreadRemaining:boardSets().recent.filter(t=>displayStatus(t)==="unread").length}),
     celebrate:()=>playPetInteraction(["hello","nod","idle"],180),
@@ -386,12 +399,13 @@ function bind() {
 async function init() {
   if(state.petMode)document.documentElement.classList.add("pet-mode");
   const visibility=()=>{document.documentElement.dataset.pageHidden=String(document.hidden);};
-  visibility();document.addEventListener("visibilitychange",()=>{visibility();updateCounts();});
-  window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',updateCounts);
+  visibility();document.addEventListener("visibilitychange",()=>{visibility();if(document.hidden)stopQuotaCoinFeedback();updateCounts();});
+  window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',()=>{stopQuotaCoinFeedback();updateCounts();});
   window.addEventListener("pagehide",()=>{document.documentElement.dataset.pageHidden="true";});
   bind();
   window.addEventListener("pagehide",stopPetInteraction);
   window.addEventListener("pagehide",cancelAutoCollapse);
+  window.addEventListener("pagehide",stopQuotaCoinFeedback);
   window.addEventListener("pagehide",()=>state.readPlay?.dispose());
   mode(state.petMode&&!state.pinned&&params.get("expanded")!=="1"?"collapsed":"compact");
   await refresh();
