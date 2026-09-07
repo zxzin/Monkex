@@ -45,7 +45,9 @@ jobs:
         run: npx tauri build --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundle }}
       - name: Archive macOS app preserving permissions
         if: runner.os == 'macOS'
-        run: ditto -c -k --sequesterRsrc --keepParent desktop_shell/src-tauri/target/release/bundle/macos/Monkex.app Monkex-macOS.zip
+        run: |
+          python scripts/finalize_monkex_macos.py
+          ditto -c -k --sequesterRsrc --keepParent desktop_shell/src-tauri/target/release/bundle/macos/Monkex.app Monkex-macOS.zip
       - uses: actions/upload-artifact@v4
         with:
           name: Monkex-${{ matrix.os }}

@@ -14,6 +14,8 @@
   "scripts/work_twin_shell.py": "34d14ad40e9687fde864eaebfefbc096abb4459006359eadf5bb3f6b217f3fb3",
   "scripts/build_monkex_release.py": "66f734fdcc6831651022a5265a08e885e762697549a0e07390a329424eabc3bb",
   "scripts/smoke_monkex_backend.py": "791e94f7c7ccf90ac90893d435e18c07e37003925b1c326f8b2983e3aaf645c2",
+  "scripts/finalize_monkex_macos.py": "09041da85cb20ec9f9ef0cc14632819da24a3b2fafbe811c968de77721398e9c",
+  "desktop_shell/src-tauri/backend-entitlements.plist": "54b2ec6347872bf62fd1c070eaa748ca8de1c13d584bcf71787a63ebb84a052c",
   "desktop_shell/package.json": "4a323b8b571c5cb34f1e3c747a9c7ee3a805333b2589daae15f327e4df475d9c",
   "desktop_shell/package-lock.json": "979cb03b03b764a17bb6558f6a6324ff699a1125c127fa2dac403cc5142d3ddc",
   "desktop_shell/src-tauri/Cargo.toml": "211b5dd95278e7d4298c35546326beca8793a70981dc63ed0d45f5ecaf711da5",

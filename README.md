@@ -46,6 +46,8 @@ npx tauri build --config src-tauri/tauri.release.conf.json --bundles nsis
 # On macOS use --bundles app (or dmg) instead.
 ```
 
+For the ad-hoc macOS preview, build `--bundles app`, return to the repository root, and run `python scripts/finalize_monkex_macos.py` before archiving the `.app`. This signs and tests the exact bundled sidecar. Its Python interpreter requires a scoped library-validation exception while embedded libraries are ad-hoc signed; the main UI keeps library validation. Retire this exception once the interpreter/extensions share a verified publisher identity.
+
 The build embeds a Python sidecar and only the curated runtime assets. End users do not need Python, Node, Rust or this source checkout. Packaging is described by the [Tauri sidecar](https://v2.tauri.app/develop/sidecar/) and [Windows installer](https://v2.tauri.app/distribute/windows-installer/) documentation.
 
 No paid signing/notarization service or publisher certificate has been configured. Unsigned Windows builds can trigger SmartScreen; the macOS build uses local ad-hoc signing and is not notarized. Do not disable OS security globally. Public release remains gated on the documented platform checks.
