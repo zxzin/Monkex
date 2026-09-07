@@ -226,7 +226,7 @@ function weeklyQuotaState(usage,now=Date.now()/1000) {
   return {label:String(Math.round(remaining*10)/10)+"%",state:remaining<=20?"low":remaining<=50?"medium":"normal",remaining};
 }
 function renderQuotaFlow(element,cards,quota) {
-  // Coins express the observed rolling Token rate; one coin has no billing value.
+  // A slow, fixed-speed turn signals observed activity while preserving the banana face.
   const now=Date.now()/1000;
   const rate=state.connected?cards.reduce((sum,card)=>{
     const tokens=card.tokens;
@@ -234,17 +234,8 @@ function renderQuotaFlow(element,cards,quota) {
     return sum+(card.status==='running'&&fresh&&tokens?.ready&&Number.isFinite(tokens.tokens_per_min)&&tokens.tokens_per_min>0?tokens.tokens_per_min:0);
   },0):0;
   element.dataset.flowing=String(rate>0&&quota.state!=='unknown');
-  element.style.setProperty('--coin-period',(rate>0?Math.max(.9,3.2/(1+Math.sqrt(rate/100000))):3.2)+'s');
-  const description=rate>0?' · 运行任务近60秒 Token 速率合计 '+Math.round(rate).toLocaleString()+' /min · 金币速度表示活跃度，不代表逐枚扣费':' · 当前无已观测的 Token 消耗';
+  const description=rate>0?' · 运行任务近60秒 Token 速率合计 '+Math.round(rate).toLocaleString()+' /min · 香蕉币缓转表示活跃，不代表逐枚扣费':' · 当前无已观测的 Token 消耗';
   element.title+=description;
-  syncNativeQuotaEffect(element,rate,quota);
-}
-function syncNativeQuotaEffect(element,rate,quota) {
-  if(!window.__TAURI__)return;
-  const number=$("weeklyRemaining").getBoundingClientRect();
-  const active=rate>0&&quota.state!=='unknown'&&state.mode==='compact'&&!document.hidden&&!prefersReducedMotion();
-  invokeDesktop('set_quota_effect',{active,period:Number.parseFloat(element.style.getPropertyValue('--coin-period'))||3.2,anchorX:number.left+number.width/2,anchorY:number.top})
-    .then(()=>element.dataset.nativeCoins='true').catch(()=>element.dataset.nativeCoins='false');
 }
 function activityTime(card) {
   const seconds=value=>typeof value==="number"?value:typeof value==="string"?Date.parse(value)/1000:NaN;

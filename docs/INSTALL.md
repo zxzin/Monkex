@@ -16,7 +16,7 @@ macOS 可运行 shasum -a 256 文件路径；Windows PowerShell 可运行 Get-Fi
 
 下载 Monkex-Windows-x64-setup.exe，双击进行当前用户安装；WebView2 缺失时安装器会尝试联网补齐。之后从开始菜单打开 Monkex。
 
-未签名包可能触发 SmartScreen，由用户核验来源并决定。真实 Codex 跳转、已读同步和透明金币层需要在实际电脑验证，CI 通过不等于完整真机验收。
+未签名包可能触发 SmartScreen，由用户核验来源并决定。真实 Codex 跳转和已读同步需要在实际电脑验证，CI 通过不等于完整真机验收。
 
 Intel Mac、Windows ARM64 与 Linux 当前没有对应附件，请暂停安装。
 

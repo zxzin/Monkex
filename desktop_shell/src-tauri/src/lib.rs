@@ -20,34 +20,6 @@ const COMPACT_HEIGHT: f64 = 420.0;
 const WINDOW_MARGIN: f64 = 18.0;
 
 static CONTEXT_MENU: OnceLock<Mutex<Option<Menu<tauri::Wry>>>> = OnceLock::new();
-static QUOTA_EFFECT: OnceLock<Mutex<QuotaEffect>> = OnceLock::new();
-
-#[derive(Clone, Copy)]
-struct QuotaEffect { active: bool, period: f64, x: f64, y: f64 }
-
-fn quota_effect_state() -> &'static Mutex<QuotaEffect> {
-    QUOTA_EFFECT.get_or_init(|| Mutex::new(QuotaEffect { active: false, period: 3.2, x: 0.0, y: 0.0 }))
-}
-
-fn sync_quota_effect(main: &WebviewWindow) -> Result<(), String> {
-    let state = *quota_effect_state().lock().map_err(|e| e.to_string())?;
-    let Some(fx) = main.app_handle().get_webview_window("quota-fx") else { return Ok(()); };
-    let expanded = main.outer_size().map_err(|e| e.to_string())?.width > 240;
-    let active = state.active && expanded && main.is_visible().unwrap_or(false) && !main.is_minimized().unwrap_or(false);
-    fx.eval(format!("document.documentElement.dataset.flowing='{}';document.documentElement.style.setProperty('--coin-period','{}s')", active, state.period)).map_err(|e| e.to_string())?;
-    if !active { return fx.hide().map_err(|e| e.to_string()); }
-    let position = main.outer_position().map_err(|e| e.to_string())?;
-    let scale = main.scale_factor().map_err(|e| e.to_string())?;
-    fx.set_position(PhysicalPosition::new(position.x + ((state.x - 48.0) * scale).round() as i32, position.y + ((state.y - 58.0) * scale).round() as i32)).map_err(|e| e.to_string())?;
-    fx.show().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn set_quota_effect(window: WebviewWindow, active: bool, period: f64, anchor_x: f64, anchor_y: f64) -> Result<(), String> {
-    if window.label() != "main" || ![period, anchor_x, anchor_y].iter().all(|n| n.is_finite()) { return Err("Invalid quota effect".into()); }
-    *quota_effect_state().lock().map_err(|e| e.to_string())? = QuotaEffect { active, period: period.clamp(0.9, 3.2), x: anchor_x.clamp(0.0, COMPACT_WIDTH), y: anchor_y.clamp(0.0, 80.0) };
-    sync_quota_effect(&window)
-}
 
 struct BackendProcess(Mutex<Option<Child>>);
 impl BackendProcess {
@@ -245,10 +217,6 @@ fn set_window_mode(window: &WebviewWindow, expanded: bool) -> Result<(), String>
 }
 
 fn resize_window(window: &WebviewWindow, width: f64, height: f64) -> Result<(), String> {
-    if width == COLLAPSED_WIDTH {
-        if let Ok(mut state) = quota_effect_state().lock() { state.active = false; }
-        let _ = sync_quota_effect(window);
-    }
     let old_position = window.outer_position().map_err(|error| error.to_string())?;
     let old_size = window.outer_size().map_err(|error| error.to_string())?;
     let scale = window.scale_factor().map_err(|error| error.to_string())?;
@@ -318,8 +286,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_pet_view,
             start_window_drag,
-            show_pet_menu,
-            set_quota_effect
+            show_pet_menu
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -338,26 +305,6 @@ pub fn run() {
                 .build()
                 .map_err(|error| error.to_string())?;
             configure_window(&window);
-            // A separate visual-only window preserves the board's native hit bounds.
-            // The whole effect window ignores input; no global cursor polling is used.
-            let fx = tauri::WebviewWindowBuilder::new(app, "quota-fx", tauri::WebviewUrl::External("http://127.0.0.1:8766/shell/coin-overlay.html".parse()?))
-                .title("Monkex Coins").inner_size(96.0, 64.0).decorations(false)
-                .transparent(true).shadow(false).always_on_top(true).skip_taskbar(true)
-                .focused(false).focusable(false).visible(false).resizable(false).build()?;
-            fx.set_ignore_cursor_events(true)?;
-            let tracking = window.clone();
-            window.on_window_event(move |event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    // Main-window close owns the application lifecycle, including
-                    // the visual-only window and the observer's process tree.
-                    api.prevent_close();
-                    tracking.app_handle().exit(0);
-                    return;
-                }
-                if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }) {
-                    let _ = sync_quota_effect(&tracking);
-                }
-            });
             app.on_menu_event(|app, event| match event.id().as_ref() {
                 "pet-toggle" => toggle_from_menu(app),
                 "pet-quit" => app.exit(0),
