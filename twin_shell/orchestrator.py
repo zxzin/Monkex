@@ -558,20 +558,38 @@ class WorkTwinShell:
         return self.list_threads()
 
     def _read_usage(self) -> dict[str, Any]:
-        response = None
         try:
             response = self.client.request("account/rateLimits/read", None)
-            usage = primary_usage(response)
-        except Exception:
-            usage = {"used_percent": None, "available": False}
-        usage["weekly"] = weekly_quota(response)
+            if not isinstance(response, dict) or response.get("error"):
+                raise AppServerError("Codex quota request unavailable")
+        except Exception as error:
+            # A transport failure does not invalidate a recent account observation.
+            # Keep its original timestamp and discard it at the existing 90s limit.
+            previous = deepcopy((self._usage_snapshot or {}).get("weekly") or {})
+            now = time.time()
+            observed = previous.get("observed_at")
+            reset = previous.get("resets_at")
+            fresh = (previous.get("available") and isinstance(observed, (int, float))
+                     and -30 <= now - observed <= 90 and (reset is None or reset > now))
+            weekly = previous if fresh else {"available": False, "remaining_percent": None}
+            weekly["refresh_pending"] = True
+            usage = {"used_percent": None, "available": False, "weekly": weekly,
+                     "refresh_pending": True, "error_kind": type(error).__name__}
+        else:
+            try:
+                usage = primary_usage(response)
+            except (ValueError, TypeError, KeyError, AttributeError):
+                usage = {"used_percent": None, "available": False}
+            # Successful responses are authoritative, including a missing window.
+            usage["weekly"] = weekly_quota(response)
         self._usage_snapshot = usage
         return deepcopy(self._usage_snapshot)
 
     def _usage_loop(self) -> None:
         while not self._stop_event.is_set():
-            self._refresh_usage()
-            if self._stop_event.wait(self._usage_poll_seconds):
+            usage = self._refresh_usage()
+            delay = min(5.0, self._usage_poll_seconds) if usage.get("refresh_pending") else self._usage_poll_seconds
+            if self._stop_event.wait(delay):
                 break
 
     def _on_app_server_message(self, message: dict[str, Any]) -> None:

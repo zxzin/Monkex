@@ -193,6 +193,9 @@ function updateCounts() {
   $("weeklyQuota").dataset.state=quota.state;
   const reset=state.weeklyUsage?.resets_at;
   $("weeklyQuota").title=quota.state==="unknown"?"Codex 周订阅额度待同步":"Codex 账户本周剩余 "+quota.label+(reset?" · 重置于 "+new Date(reset*1000).toLocaleString("zh-CN"):"");
+  if(quota.state!=="unknown"&&(!state.connected||state.weeklyUsage.refresh_pending)){
+    $("weeklyQuota").title+=" · 上次同步 "+new Date(state.weeklyUsage.observed_at*1000).toLocaleTimeString("zh-CN")+" · 正在重试同步";
+  }
   $("petQuotaRemaining").textContent=quota.label;
   $("petQuota").dataset.state=quota.state;
   $("petQuota").title=$("weeklyQuota").title;
@@ -214,7 +217,7 @@ function updateCounts() {
   window.WorkTwinBananaTree.renderGrowth($("petGrowth"),running,state.connected);
 }
 function weeklyQuotaState(usage,now=Date.now()/1000) {
-  const valid=state.connected&&usage?.available&&Number.isFinite(usage.remaining_percent)&&
+  const valid=usage?.available&&Number.isFinite(usage.remaining_percent)&&
     Number.isFinite(usage.observed_at)&&now-usage.observed_at<=90&&now-usage.observed_at>=-30&&
     (usage.resets_at==null||usage.resets_at>now);
   if(!valid)return {label:"—",state:"unknown"};
@@ -364,7 +367,7 @@ async function refreshFromCoin(event) {
   button.title="正在刷新任务与额度…";
   try{
     await refresh(true);
-    button.title=weeklyQuotaState(state.weeklyUsage).state==="unknown"?"额度暂未同步，点击重试":"已刷新 · 点击刷新任务与额度";
+    button.title=weeklyQuotaState(state.weeklyUsage).state==="unknown"?"额度暂未同步，点击重试":state.weeklyUsage?.refresh_pending?"显示上次同步额度 · 正在自动重试":"已刷新 · 点击刷新任务与额度";
   }finally{
     state.coinRefreshing=false;button.setAttribute("aria-busy","false");
   }
@@ -456,6 +459,7 @@ async function init() {
       refresh();
     });
   }
-  events.onerror=()=>{state.connected=false;renderList(true);updateCounts();};
+  // SSE is an update hint; the polled task and quota responses own their health.
+  events.onerror=()=>{refresh();};
 }
 init();

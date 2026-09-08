@@ -2,6 +2,8 @@
 
 ## 0.1.1 Preview
 
+- Weekly quota now follows its own account observation, independently of task-feed and event-stream reconnects. Transport timeouts retain the last valid value within the existing 90-second freshness limit, show its observation time on hover and retry after five seconds; expired or authoritative missing quota remains unknown.
+
 - The entire tree supports drag-to-move and tap-to-open; drag release keeps it collapsed. Right-click the tree to quit. macOS launches as an agent app without a Dock tile; Windows keeps the observer window out of the taskbar.
 
 - Read tasks use a subdued pixel-art banana peel, completing the green growing banana → ripe unread banana → collected peel visual sequence.

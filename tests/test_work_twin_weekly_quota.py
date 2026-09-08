@@ -7,6 +7,46 @@ def bucket(used=62, duration=10080):
 
 
 class WeeklyQuotaTests(unittest.TestCase):
+    def test_transport_failure_retries_after_five_seconds(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import Mock
+        from twin_shell.orchestrator import WorkTwinShell
+        with tempfile.TemporaryDirectory() as temporary:
+            shell = WorkTwinShell(state_path=Path(temporary) / "state.json", client=Mock(running=True))
+            shell._refresh_usage = Mock(return_value={"refresh_pending": True})
+            shell._stop_event = Mock()
+            shell._stop_event.is_set.return_value = False
+            shell._stop_event.wait.return_value = True
+            shell._usage_loop()
+            shell._stop_event.wait.assert_called_once_with(5.0)
+
+    def test_timeout_preserves_fresh_observation_and_retries_without_redating(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import Mock, patch
+        from twin_shell.orchestrator import WorkTwinShell
+        client = Mock(running=True)
+        client.request.side_effect = [{"result": {"rateLimits": bucket(13)}}, TimeoutError(), {"error": {"code": -32603}},
+                                      TimeoutError(), {"result": {"rateLimits": bucket(14)}},
+                                      {"result": {"rateLimits": bucket(14, 300)}}]
+        with tempfile.TemporaryDirectory() as temporary:
+            shell = WorkTwinShell(state_path=Path(temporary) / "state.json", client=client)
+            with patch('time.time', return_value=100):
+                self.assertEqual(shell._refresh_usage()['weekly']['remaining_percent'], 87)
+            with patch('time.time', return_value=140):
+                weekly = shell._refresh_usage()['weekly']
+                self.assertEqual(weekly['remaining_percent'], 87)
+                self.assertEqual(weekly['observed_at'], 100)
+                self.assertTrue(weekly['refresh_pending'])
+            with patch('time.time', return_value=150):
+                self.assertEqual(shell._refresh_usage()['weekly']['remaining_percent'], 87)
+            with patch('time.time', return_value=191):
+                self.assertFalse(shell._refresh_usage()['weekly']['available'])
+            with patch('time.time', return_value=192):
+                self.assertEqual(shell._refresh_usage()['weekly']['remaining_percent'], 86)
+                self.assertFalse(shell._refresh_usage()['weekly']['available'], 'authoritative missing weekly window clears previous account data')
+
     def test_manual_refresh_reads_quota_and_returns_board_without_task_actions(self):
         import tempfile
         from pathlib import Path

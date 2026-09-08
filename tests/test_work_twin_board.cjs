@@ -17,7 +17,7 @@ assert.equal(ctx.weeklyQuotaState({...quota,remaining_percent:0}).label,'0%');
 assert.equal(ctx.weeklyQuotaState({...quota,observed_at:now-91}).label,'—');
 assert.equal(ctx.weeklyQuotaState({...quota,resets_at:now-1}).label,'—');
 assert.equal(ctx.weeklyQuotaState(null).label,'—');
-state.connected=false;assert.equal(ctx.weeklyQuotaState(quota).label,'—');state.connected=true;
+state.connected=false;assert.equal(ctx.weeklyQuotaState(quota).label,'38%','task health is independent of fresh account quota');state.connected=true;
 state.threads=[card('old-unread',8*day),card('today-read',3600,{unread:false}),
   card('today-unread',7200),card('day-edge',day),card('history',day+1),
   card('week-edge',7*day),card('long-running',9*day,{status:'running',unread:false}),
