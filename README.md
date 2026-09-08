@@ -8,9 +8,17 @@ A tiny, local-first desktop companion for Codex: live task status, unread result
 
 ![Monkex 实际界面：香蕉树与任务看板，公开示例任务和额度](docs/monkex-showcase.png)
 
-[下载安装包](https://github.com/zxzin/Monkex/releases) · [发给 Codex 的安装提示词](INSTALL_WITH_CODEX.md) · [安装与故障排查](docs/INSTALL.md) · [更新记录](CHANGELOG.md) · [反馈问题](https://github.com/zxzin/Monkex/issues)
+[下载安装包](https://github.com/zxzin/Monkex/releases) · [交互使用手册](docs/guide.html) · [发给 Codex 的安装提示词](INSTALL_WITH_CODEX.md) · [安装与故障排查](docs/INSTALL.md) · [更新记录](CHANGELOG.md) · [反馈问题](https://github.com/zxzin/Monkex/issues)
 
 > 展示图由当前产品界面渲染，使用公开示例任务与额度，未包含作者真实对话。看板直接显示 Codex 已有任务标题与进展文本。
+
+## 可点击的使用手册
+
+[下载单文件 HTML 手册](https://github.com/zxzin/Monkex/raw/refs/heads/main/docs/guide.html)，保存后用浏览器打开即可，支持离线浏览与手机排版。GitHub 文件页展示源码；可点击文件页的 **Download raw file** 下载后体验交互。
+
+手册包含 11 个章节：产品概览、桌面树、三种状态、任务看板与跳转、收香蕉与本周收成、额度与 Token 活跃度、固定与退出、设计语言、安装、数据边界及常见问题。可亲自尝试拖动树、切换状态、收香蕉、额度变色与图钉效果。
+
+全部使用独立示例数据，素材已内嵌；无需登录或连接 Codex，不读取或修改真实任务。这里提供 HTML 文件，尚未启用 GitHub Pages 在线托管。
 
 ## 能做什么？
 
