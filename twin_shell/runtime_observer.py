@@ -68,10 +68,17 @@ class LocalRuntimeObserver:
                 if not databases:
                     raise OSError("Local state database unavailable")
                 with closing(sqlite3.connect(databases[-1].as_uri() + "?mode=ro", uri=True, timeout=1)) as db:
-                    paths = {}
+                    columns = {row[1] for row in db.execute("PRAGMA table_info(threads)")}
+                    updated_column = "updated_at" if "updated_at" in columns else "NULL"
+                    metadata = {}
                     for start in range(0, len(thread_ids), 400):
                         batch = thread_ids[start:start+400]
-                        paths.update(db.execute(f"SELECT id, rollout_path FROM threads WHERE archived=0 AND id IN ({','.join('?' for _ in batch)})", batch))
+                        rows = db.execute(
+                            f"SELECT id, rollout_path, {updated_column} FROM threads "
+                            f"WHERE archived=0 AND id IN ({','.join('?' for _ in batch)})",
+                            batch,
+                        )
+                        metadata.update((row[0], (row[1], row[2])) for row in rows)
                 self.error = False
             except (OSError, ValueError, sqlite3.Error):
                 self.error = True
@@ -79,9 +86,10 @@ class LocalRuntimeObserver:
                 return
             for thread_id in thread_ids:
                 self._available.discard(thread_id)
-                path_value = paths.get(thread_id)
-                if not path_value:
+                thread_metadata = metadata.get(thread_id)
+                if not thread_metadata:
                     continue
+                path_value, database_updated_at = thread_metadata
                 try:
                     path = Path(path_value).resolve()
                     if not path.is_relative_to(self.root / "sessions"):
@@ -89,7 +97,13 @@ class LocalRuntimeObserver:
                     stat = path.stat()
                     identity = (str(path), stat.st_dev, stat.st_ino)
                     cursor = self._cursors.get(thread_id)
-                    if not cursor and self.clock() - stat.st_mtime > RUNTIME_LEASE:
+                    freshness = stat.st_mtime
+                    if isinstance(database_updated_at, (int, float)):
+                        freshness = max(freshness, float(database_updated_at))
+                    # Windows can retain an open rollout's original mtime while
+                    # Codex keeps appending. The state database is the canonical
+                    # freshness signal for selecting which bounded tails to read.
+                    if not cursor and self.clock() - freshness > RUNTIME_LEASE:
                         continue
                     if not cursor or cursor.identity != identity or stat.st_size < cursor.offset:
                         cursor = Cursor(identity)

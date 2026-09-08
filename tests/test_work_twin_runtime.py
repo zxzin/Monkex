@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from contextlib import closing
 import json
+import os
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -35,6 +36,23 @@ class RuntimeTests(unittest.TestCase):
         tracked.close.assert_called_once_with()
         with self.assertRaises(sqlite3.ProgrammingError):
             connection.execute("SELECT 1")
+
+    def test_database_timestamp_tracks_open_windows_rollout_with_stale_mtime(self):
+        self.append("item_completed", turn_id="turn-1", item={"type": "Reasoning"})
+        stale = self.now - 3600
+        os.utime(self.log, (stale, stale))
+        with closing(sqlite3.connect(self.root / "state_5.sqlite")) as db, db:
+            db.execute("ALTER TABLE threads ADD COLUMN updated_at INTEGER")
+            db.execute("UPDATE threads SET updated_at=? WHERE id=?", (int(self.now), "thread-a"))
+        self.observer = LocalRuntimeObserver(self.root, clock=lambda: self.now)
+        self.assertEqual(self.observed()["status"], "running")
+
+    def test_stale_rollout_without_fresh_database_timestamp_stays_skipped(self):
+        self.append("item_completed", turn_id="turn-1", item={"type": "Reasoning"})
+        stale = self.now - 3600
+        os.utime(self.log, (stale, stale))
+        self.observer = LocalRuntimeObserver(self.root, clock=lambda: self.now)
+        self.assertEqual(self.observed()["status"], "unknown")
 
     def event(self, kind, *, turn_id=None, envelope="event_msg", **extra):
         payload = {"type": kind, **extra}

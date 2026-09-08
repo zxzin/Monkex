@@ -25,7 +25,7 @@ A tiny, local-first desktop companion for Codex: live task status, unread result
 
 ## 下载与安装
 
-新版 **0.1.1 Preview** 正在准备发行。以 [Releases 页面](https://github.com/zxzin/Monkex/releases)实际可见的公开附件为准；草稿不是公开下载。
+当前公开版为 **0.1.1 Preview**。以 [Releases 页面](https://github.com/zxzin/Monkex/releases)实际可见的公开附件为准；草稿不是公开下载。
 
 | 电脑 | 对应附件 | 安装 |
 | --- | --- | --- |

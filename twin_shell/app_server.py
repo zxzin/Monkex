@@ -95,7 +95,7 @@ class AppServerClient:
                 "clientInfo": {
                     "name": "zinx-work-twin-shell",
                     "title": "Monkex",
-                    "version": "0.1.0",
+                    "version": "0.1.1",
                 },
                 "capabilities": {"experimentalApi": True},
             },
