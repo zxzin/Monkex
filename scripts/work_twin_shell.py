@@ -84,7 +84,9 @@ class ShellRequestHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         try:
             payload = self._body()
-            if path.startswith("/api/threads/") and path.endswith("/ack"):
+            if path == "/api/refresh":
+                self._json(self.server.shell.refresh_dashboard())
+            elif path.startswith("/api/threads/") and path.endswith("/ack"):
                 thread_id = unquote(path.removeprefix("/api/threads/").removesuffix("/ack")).strip("/")
                 self._json(self.server.shell.acknowledge_result(thread_id, str(payload.get("version") or "")))
             elif path.startswith("/api/threads/") and path.endswith("/open"):

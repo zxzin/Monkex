@@ -173,7 +173,7 @@ function relativeTime(value) {
 function mode(value) {
   state.mode = value;
   cancelAutoCollapse();
-  if(value==="collapsed"){state.readPlay?.suspend();setSettings(false);}
+  if(value==="collapsed")state.readPlay?.suspend();
   state.petExpanded = value !== "collapsed";
   if (state.petExpanded) stopPetInteraction();
   document.documentElement.dataset.mode = value;
@@ -208,7 +208,7 @@ function updateCounts() {
   $("petLauncher").dataset.state=activity.state;
   $("petCharacter").dataset.running=String(activity.running);
   const quotaLabel=quota.state==="unknown"?"周额度待同步":"周剩余 "+quota.label;
-  $("petLauncher").title=label+" · "+quotaLabel+" · 点击查看任务";
+  $("petLauncher").title=label+" · "+quotaLabel+" · 按住拖动 · 轻点展开 · 右键退出";
   $("petLauncher").setAttribute("aria-label",label+"，"+quotaLabel+"，展开任务动态");
   window.WorkTwinBananaTree?.render($("petHarvest"),unread,state.connected);
   window.WorkTwinBananaTree.renderGrowth($("petGrowth"),running,state.connected);
@@ -249,11 +249,8 @@ function boardSets(now=Date.now()/1000) {
   };
 }
 function filtered() {
-  const query=$("searchInput").value.trim().toLowerCase();
   const rank=t=>state.connected&&t.status==="running"?2:state.filter==="recent"&&!t.unread?1:0;
-  return (boardSets()[state.filter]||[]).filter(t=>
-    (!query || [t.summary,t.name,t.project_label].join(" ").toLowerCase().includes(query))
-  ).sort((a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
+  return (boardSets()[state.filter]||[]).sort((a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
 }
 function renderList(force=false) {
   const list=$("taskList");
@@ -272,17 +269,22 @@ function renderList(force=false) {
     if(!existing.has(t.id))b.addEventListener("click",()=>selectThread(t.id));
     updateTaskRow(b,t);return b;
   });
-  if(!rows.length)rows.push(node("p","empty-note",$("searchInput").value?"当前时间范围内没有匹配任务":state.filter==="board"?(state.connected?"当前待办已看完\n最近结果可在「近24小时」找回":"运行状态待同步"):state.filter==="history"?"24 小时至 7 天内暂无历史任务":"近 24 小时暂无任务"));
+  if(!rows.length)rows.push(node("p","empty-note",state.filter==="board"?(state.connected?"当前待办已看完\n最近结果可在「近24小时」找回":"运行状态待同步"):state.filter==="history"?"24 小时至 7 天内暂无历史任务":"近 24 小时暂无任务"));
   const scroll=$("taskList").scrollTop;
   $("taskList").replaceChildren(...rows);$("taskList").scrollTop=scroll;
   syncBoardSize();
 }
-async function refresh() {
+async function refresh(force=false) {
   state.readPlay?.syncPocket();
-  if(state.refreshing)return;
+  if(state.refreshing){
+    await state.refreshPromise;
+    if(force)return refresh(true);
+    return;
+  }
   state.refreshing=true;
+  state.refreshPromise=(async()=>{
   try{
-    const data=await api("/api/threads");
+    const data=await api(force?"/api/refresh":"/api/threads",force?{}:undefined);
     state.readPlay?.setWeeklyHarvest(data.weekly_harvest);
     state.threads=data.threads||[];
     state.connected=data.health?.app_server==="online" && !data.error && !data.stale && !data.loading;
@@ -290,18 +292,20 @@ async function refresh() {
     state.observedAt=data.observed_at;
     state.weeklyUsage=data.health?.usage?.weekly||null;
     if(data.error)banner(data.error);
-    if(!data.loading) renderList();
+    if(!data.loading) renderList(force);
     updateCounts();
   }catch(e){
     state.connected=false;$("connectionText").textContent="连接中断";banner(e.message);renderList(true);updateCounts();
   }finally{state.refreshing=false;}
+  })();
+  return state.refreshPromise;
 }
 function boardHeight(count,extra=0) {
   return Math.min(420,Math.max(180,92+Math.max(1,count)*46+extra));
 }
 function syncBoardSize(force=false) {
   if(state.mode!=="compact")return;
-  const settings=$("boardSettings"),extra=(settings.hidden?0:settings.offsetHeight+8)+($("systemBanner").hidden?0:$("systemBanner").offsetHeight);
+  const extra=$("systemBanner").hidden?0:$("systemBanner").offsetHeight;
   const height=boardHeight(filtered().length,extra);
   if(!force&&height===state.boardSize)return;
   state.boardSize=height;document.documentElement.style.setProperty("--board-height",height+"px");
@@ -311,7 +315,7 @@ function cancelAutoCollapse() {
   clearTimeout(state.autoCollapseTimer);state.autoCollapseTimer=null;
 }
 function syncPin() {
-  const label=state.pinned?"拔起图钉 · 跳转后自动收起":"钉住看板 · 跳转后保持展开";
+  const label=state.pinned?"拔起图钉 · 切换窗口时自动收起":"钉住看板 · 切换窗口时保持展开";
   $("pinButton").setAttribute("aria-pressed",String(state.pinned));
   $("pinButton").setAttribute("aria-label",label);$("pinButton").title=label;
 }
@@ -320,13 +324,12 @@ function togglePin() {
   try{localStorage.setItem("twin-pinned",String(state.pinned));}catch{}
   syncPin();
 }
-function setSettings(open) {
-  cancelAutoCollapse();
-  $("boardSettings").hidden=!open;
-  $("greetMonkey").setAttribute("aria-expanded",String(open));
-  if(!open&&$("searchInput").value){$("searchInput").value="";renderList(true);}
-  syncBoardSize();
-  if(open)$("searchInput").focus();
+function onWindowFocus(event) {
+  // Task navigation owns its success/read-feedback timer and error visibility.
+  // Native window focus keeps ordinary control-to-control focus changes local.
+  if(event.detail?.focused===false&&state.petMode&&state.mode==="compact"&&!state.pinned&&!state.navigation?.pending){
+    mode("collapsed");
+  }
 }
 async function selectThread(id) {
   cancelAutoCollapse();
@@ -335,7 +338,7 @@ async function selectThread(id) {
   if(opened&&revision===state.selectionRevision&&!state.pinned&&state.petMode&&$("systemBanner").hidden){
     state.autoCollapseTimer=setTimeout(()=>{
       state.autoCollapseTimer=null;
-      if(revision===state.selectionRevision&&!state.pinned&&state.mode==="compact"&&$("boardSettings").hidden&&!state.navigation.pending)mode("collapsed");
+      if(revision===state.selectionRevision&&!state.pinned&&state.mode==="compact"&&!state.navigation.pending)mode("collapsed");
     },1200);
   }
   return opened;
@@ -352,8 +355,51 @@ function playQuotaCoin(event) {
 function stopQuotaCoinFeedback() {
   $("quotaCoinButton").getAnimations().forEach(animation=>animation.cancel());
 }
+async function refreshFromCoin(event) {
+  playQuotaCoin(event);
+  if(state.coinRefreshing)return;
+  state.coinRefreshing=true;
+  const button=$("quotaCoinButton");
+  button.setAttribute("aria-busy","true");
+  button.title="正在刷新任务与额度…";
+  try{
+    await refresh(true);
+    button.title=weeklyQuotaState(state.weeklyUsage).state==="unknown"?"额度暂未同步，点击重试":"已刷新 · 点击刷新任务与额度";
+  }finally{
+    state.coinRefreshing=false;button.setAttribute("aria-busy","false");
+  }
+}
+function bindPetDrag() {
+  const tree=$("petLauncher");
+  let press=null,dragged=false,moves=Promise.resolve();
+  const release=()=>{if(press&&tree.hasPointerCapture?.(press.id))tree.releasePointerCapture(press.id);press=null;};
+  tree.onpointerdown=e=>{
+    if(e.button!==0||!state.petMode)return;
+    dragged=false;press={id:e.pointerId,x:e.screenX,y:e.screenY};
+    tree.setPointerCapture(e.pointerId);e.preventDefault();
+  };
+  tree.onpointermove=e=>{
+    // Captured pointer lifetime owns the gesture; WKWebView may report buttons=0.
+    if(!press||press.id!==e.pointerId)return;
+    const dx=e.screenX-press.x,dy=e.screenY-press.y;
+    if(!dragged&&Math.hypot(dx,dy)<4)return;
+    if(!dragged){dragged=true;stopPetInteraction();}
+    press.x=e.screenX;press.y=e.screenY;
+    // Screen coordinates stay stable as the captured pointer moves the window.
+    moves=moves.then(()=>invokeDesktop("move_pet_window",{dx,dy}))
+      .catch(error=>{tree.title="拖动失败，可重试："+error;});
+  };
+  tree.onpointerup=release;
+  tree.onpointercancel=release;
+  tree.ondragstart=e=>e.preventDefault();
+  tree.onclick=e=>{
+    if(e.detail!==0&&dragged){e.preventDefault();return;}
+    mode("compact");
+  };
+}
 function bind() {
-  $("quotaCoinButton").onclick=playQuotaCoin;
+  window.addEventListener("work-twin-window-focus",onWindowFocus);
+  $("quotaCoinButton").onclick=refreshFromCoin;
   if(window.WorkTwinReadPlay)state.readPlay=new window.WorkTwinReadPlay({
     getContext:()=>({connected:state.connected,mode:state.mode,filter:state.filter,unreadRemaining:boardSets().recent.filter(t=>displayStatus(t)==="unread").length}),
     celebrate:()=>playPetInteraction(["hello","nod","idle"],180),
@@ -370,7 +416,6 @@ function bind() {
   });
   $("collapseButton").onclick=()=>mode(state.petMode?"collapsed":"compact");
   $("pinButton").onclick=togglePin;syncPin();
-  $("searchInput").oninput=()=>renderList(true);
   document.querySelectorAll("[data-filter]").forEach(b=>b.onclick=()=>{
     state.filter=b.dataset.filter;
     document.querySelectorAll("[data-filter]").forEach(c=>{c.classList.toggle("active",c===b);c.setAttribute("aria-pressed",String(c===b));});
@@ -381,16 +426,9 @@ function bind() {
   list.onmouseleave=()=>{state.listBusy=false;if(state.queuedRender&&!list.contains(document.activeElement))renderList();};
   list.onfocusin=()=>state.listBusy=true;
   list.onfocusout=()=>setTimeout(()=>{if(!list.contains(document.activeElement)&&!list.matches(":hover")){state.listBusy=false;if(state.queuedRender)renderList();}},0);
-  for(const id of ["petDragHandle","dragArea"])$(id).onmousedown=e=>{if(e.button===0&&state.petMode){e.preventDefault();invokeDesktop("start_window_drag");}};
+  $("dragArea").onmousedown=e=>{if(e.button===0&&state.petMode){e.preventDefault();invokeDesktop("start_window_drag");}};
+  bindPetDrag();
   $("petLauncher").onmouseenter=()=>{if(Date.now()>state.petInteractionCooldownUntil){state.petInteractionCooldownUntil=Date.now()+2000;playPetInteraction(["hello","peek","idle"],380);}};
-  $("petLauncher").onclick=()=>mode("compact");
-  $("greetMonkey").onclick=()=>{const open=$("boardSettings").hidden;setSettings(open);if(open)playPetInteraction(["hello","idle"],180);};
-  document.addEventListener("click",event=>{
-    if(!$("boardSettings").hidden&&!$("boardSettings").contains(event.target)&&!$("greetMonkey").contains(event.target))setSettings(false);
-  });
-  document.addEventListener("keydown",event=>{
-    if(event.key==="Escape"&&!$("boardSettings").hidden){event.preventDefault();setSettings(false);$("greetMonkey").focus();}
-  });
   $("petShell").oncontextmenu=e=>{if(window.__TAURI__){e.preventDefault();invokeDesktop("show_pet_menu",{x:e.clientX,y:e.clientY});}};
   window.addEventListener("work-twin-pet-mode",e=>mode(e.detail?.expanded?"compact":"collapsed"));
 }

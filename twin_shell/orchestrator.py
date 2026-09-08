@@ -114,6 +114,7 @@ class WorkTwinShell:
         self._stop_event = threading.Event()
         self._usage_poll_seconds = usage_poll_seconds
         self._usage_snapshot: dict[str, Any] | None = None
+        self._usage_lock = threading.Lock()
         self.client = client or AppServerClient(on_message=self._on_app_server_message)
         # Fixture clients stay isolated from the user's actual local history.
         self.runtime_observer = runtime_observer or (LocalRuntimeObserver(Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))) if client is None else None)
@@ -543,6 +544,20 @@ class WorkTwinShell:
         os.replace(temporary, self.state_path)
 
     def _refresh_usage(self) -> dict[str, Any]:
+        # Manual and periodic refresh share one request and one snapshot writer.
+        if not self._usage_lock.acquire(blocking=False):
+            with self._usage_lock:
+                return deepcopy(self._usage_snapshot or {})
+        try:
+            return self._read_usage()
+        finally:
+            self._usage_lock.release()
+
+    def refresh_dashboard(self) -> dict[str, Any]:
+        self._refresh_usage()
+        return self.list_threads()
+
+    def _read_usage(self) -> dict[str, Any]:
         response = None
         try:
             response = self.client.request("account/rateLimits/read", None)

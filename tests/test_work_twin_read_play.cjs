@@ -29,7 +29,7 @@ function element(rect={left:0,top:0,width:344,height:420,bottom:420}){
 }
 const descendants=root=>root.children.flatMap(child=>[child,...descendants(child)]);
 function runDelay(ms){for(const [timer,t] of [...timers])if(t.ms===ms){timers.delete(timer);t.fn();}}
-const elements=new Map(['appShell','readPlayLayer','readPlayToast','playFeedbackToggle','greetMonkey'].map(id=>[id,element()]));
+const elements=new Map(['appShell','readPlayLayer','readPlayToast','greetMonkey'].map(id=>[id,element()]));
 elements.set('greetMonkey',element({left:12,top:10,width:34,height:34,bottom:44}));
 const row=element({left:8,top:100,width:328,height:40,bottom:140});row.dataset={threadId:'a',status:'unread'};
 row.querySelector=selector=>selector==='.task-state'?element({left:16,top:105,width:11,height:16,bottom:121}):null;
@@ -38,9 +38,12 @@ const sibling=element({left:8,top:140,width:328,height:40,bottom:180});sibling.d
 sibling.querySelector=()=>null;
 const listeners=new Map();
 const doc={hidden:false,getElementById:id=>elements.get(id),querySelectorAll:()=>[row,sibling],createElement:()=>element(),addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
-const writes=[];
 const context={connected:true,mode:'compact',filter:'board',unreadRemaining:1};
-const play=new ReadPlay({getContext:()=>context,document:doc,storage:{getItem:()=>null,setItem:(...args)=>writes.push(args)},clock:()=>now,celebrate:()=>celebrations++});
+// An old disabled preference is ignored: collection feedback is always enabled.
+let storageReads=0;
+global.localStorage={getItem:()=>{storageReads++;return 'false';},setItem:()=>assert.fail('feedback has no persisted preference')};
+const play=new ReadPlay({getContext:()=>context,document:doc,clock:()=>now,celebrate:()=>celebrations++});
+assert.equal(storageReads,0);
 const toast=elements.get('readPlayToast'),layer=elements.get('readPlayLayer');
 toast.hidden=true;
 play.arm(card());now+=100;play.confirm(receipt(),card());
@@ -62,14 +65,13 @@ assert.equal(play.landed,3,'overflow receives static feedback without dropping s
 assert.equal(layer.children.length,4,'new receipts preserve earlier in-flight bananas');
 runDelay(740);assert.equal(play.landed,7);assert.equal(play.pocket.textContent,'—');assert.match(toast.textContent,/连收 ×7/,'late arrivals retain the current combo');
 runDelay(420);assert.equal(layer.children.length,0);assert.equal(play.flights.size,0);
-const beforeDisable=celebrations;
-play.arm(card('disable'));play.confirm(receipt('disable'),card('disable'));
-play.setEnabled(false);assert.equal(timers.size,0);assert.equal(toast.hidden,true);assert.equal(elements.get('appShell')['data-play'],'false');
-assert.equal(play.pocket.hidden,false,'weekly statistics remain visible with effects disabled');assert.equal(play.landed,8,'canceling visual feedback preserves accepted receipt totals');
+const beforeSuspend=celebrations;
+play.arm(card('suspend'));play.confirm(receipt('suspend'),card('suspend'));
+play.suspend();assert.equal(timers.size,0);assert.equal(toast.hidden,true);
+assert.equal(play.pocket.hidden,false,'weekly statistics remain visible when animations are suspended');assert.equal(play.landed,8,'canceling visual feedback preserves accepted receipt totals');
 for(const fn of frames.splice(0))fn();assert.equal(animationCalls,0,'canceled frames cannot animate later');
-assert.deepEqual(writes,[['twin-play-feedback','false']],'only a cosmetic preference persists');
-play.arm(card('b'));play.confirm(receipt('b'),card('b'));assert.equal(toast.hidden,true);
-play.setEnabled(true);reduced=true;play.arm(card('b'));now+=100;play.confirm(receipt('b'),card('b'));assert.equal(layer.children.length,0);assert.equal(celebrations,beforeDisable);assert.equal(toast.hidden,false,'reduced motion retains static receipt');assert.equal(play.pocket.textContent,'—');
+context.mode='collapsed';play.arm(card('b'));play.confirm(receipt('b'),card('b'));assert.equal(toast.hidden,true);
+context.mode='compact';reduced=true;play.arm(card('b'));now+=100;play.confirm(receipt('b'),card('b'));assert.equal(layer.children.length,0);assert.equal(celebrations,beforeSuspend);assert.equal(toast.hidden,false,'reduced motion retains static receipt');assert.equal(play.pocket.textContent,'—');
 play.clear();doc.hidden=true;play.arm(card('c'));play.confirm(receipt('c'),card('c'));assert.equal(toast.hidden,true);
 doc.hidden=false;context.connected=false;play.arm(card('c'));play.confirm(receipt('c'),card('c'));assert.equal(toast.hidden,true);
 context.connected=true;context.unreadRemaining=0;play.arm(card('c'));now+=100;play.confirm(receipt('c'),card('c'));assert.equal(toast.textContent,'收齐啦 · 本次 10 根');
@@ -81,7 +83,7 @@ assert.equal(localWeekStart(sunday),'2026-09-07');assert.equal(localWeekStart(mo
 assert.equal(localWeekStart(new Date(2027,0,1,12).getTime()),'2026-12-28');
 now=sunday;play.setWeeklyHarvest({week_start:'2026-09-07',count:125});assert.equal(play.pocket.textContent,'125','show full natural-week total above 99');
 play.setWeeklyHarvest({week_start:'2026-09-07',count:124});assert.equal(play.pocket.textContent,'125','an older in-flight feed cannot overwrite an acknowledgement');
-play.setEnabled(false);assert.equal(play.pocket.hidden,false);assert.match(play.monkey.title,/本周已收 125 根/);
+play.suspend();assert.equal(play.pocket.hidden,false);assert.match(play.monkey.title,/本周已收 125 根/);
 now=monday;play.syncPocket();assert.equal(play.pocket.textContent,'0','Monday resets display even before next server response');
 play.setWeeklyHarvest({week_start:'2026-09-07',count:999});assert.equal(play.pocket.textContent,'0','ignore previous-week responses');
 for(const count of [-1,NaN,1.5,Infinity])play.setWeeklyHarvest({week_start:'2026-09-14',count});
@@ -91,12 +93,20 @@ assert.equal(listeners.size,0);assert.equal(elements.get('greetMonkey').children
 const fs=require('node:fs'),path=require('node:path');
 const css=fs.readFileSync(path.join(__dirname,'../shell/styles.css'),'utf8');
 const source=fs.readFileSync(path.join(__dirname,'../shell/read-play.js'),'utf8');
+for(const removed of ['twin-play-feedback','setEnabled','syncToggle','playFeedbackToggle','this.enabled'])assert.ok(!source.includes(removed),'remove opt-out preference path '+removed);
 assert.ok(!(css+source).includes('🍌'),'ImageGen asset replaces the platform emoji');
 assert.equal((css.match(/background:var\(--banana-image\) center\/contain no-repeat/g)||[]).length,3,'flying, receipt and tree fruit use the ripe sprite');
-assert.match(css,/\.app-shell\[data-play=true\] \.task-button\[data-status=unread\] \.task-state\{[^}]*--banana-sprite:var\(--banana-image\)/,'unread binds the same ripe sprite through the shared banana renderer');
+assert.match(css,/\.app-shell \.task-button\[data-status=unread\] \.task-state\{[^}]*--banana-sprite:var\(--banana-image\)/,'unread binds the same ripe sprite through the shared banana renderer');
 assert.match(css,/background:var\(--banana-sprite\) center\/contain no-repeat/);
 const bananaAsset=css.match(/--banana-image:url\('([^']+)'\)/)?.[1];
 assert.ok(bananaAsset?.startsWith('/shell/assets/'),'resolve the active shared sprite');
 const png=fs.readFileSync(path.join(__dirname,'..',bananaAsset));
 assert.equal(png.subarray(1,4).toString(),'PNG');assert.equal(png[25],6,'generated banana retains RGBA transparency');
-console.log('PASS: receipt guards, pickup/arrival/pocket phases, rapid overlapping flights, bounded effects, combo, cancellation, visibility, reduced motion and cosmetic-only storage');
+const peelAsset=css.match(/--banana-peel-image:url\('([^']+)'\)/)?.[1];
+assert.ok(peelAsset?.endsWith('/pixel-banana-peel-v1.png'),'read state uses its own generated peel asset');
+const peel=fs.readFileSync(path.join(__dirname,'..',peelAsset));
+assert.equal(peel.subarray(1,4).toString(),'PNG');assert.equal(peel[25],6,'peel preserves generated alpha');
+assert.match(css,/\[data-status=read\] \.task-state::after\{[^}]*width:16px;height:16px;[^}]*background:var\(--banana-peel-image\)/,'read peel stays in the existing title-line icon slot');
+assert.ok(!css.includes('box-shadow:2px 2px var(--sage)'),'obsolete read checkmark is removed');
+assert.ok(fs.readFileSync(path.join(__dirname,'../scripts/build_monkex_release.py'),'utf8').includes(peelAsset.replace('/shell/','')),'release packaging includes the peel');
+console.log('PASS: always-on receipt feedback, ignored legacy opt-out, weekly totals, bounded flights, cancellation, visibility and reduced motion');

@@ -70,12 +70,34 @@ fn set_pet_view(window: WebviewWindow, view: String, height: Option<f64>) -> Res
         "compact" => (COMPACT_WIDTH, compact_height(height)),
         _ => return Err("窗口模式无效".to_string()),
     };
-    resize_window(&window, width, height)
+    // Acquire focus when opening the tree, while ordinary feed resizes leave
+    // the user's active application unchanged.
+    let was_collapsed = window.inner_size().map_err(|error| error.to_string())?
+        .to_logical::<f64>(window.scale_factor().map_err(|error| error.to_string())?)
+        .width <= COLLAPSED_WIDTH + 1.0;
+    resize_window(&window, width, height)?;
+    if view == "compact" && was_collapsed {
+        window.set_focus().map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
 fn start_window_drag(window: WebviewWindow) -> Result<(), String> {
     window.start_dragging().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn move_pet_window(window: WebviewWindow, dx: f64, dy: f64) -> Result<(), String> {
+    if !dx.is_finite() || !dy.is_finite() {
+        return Err("拖动位移无效".to_string());
+    }
+    let scale = window.scale_factor().map_err(|error| error.to_string())?;
+    let position = window.outer_position().map_err(|error| error.to_string())?;
+    window.set_position(PhysicalPosition::new(
+        position.x + (dx * scale).round() as i32,
+        position.y + (dy * scale).round() as i32,
+    )).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -286,6 +308,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_pet_view,
             start_window_drag,
+            move_pet_window,
             show_pet_menu
         ])
         .setup(|app| {
@@ -305,6 +328,15 @@ pub fn run() {
                 .build()
                 .map_err(|error| error.to_string())?;
             configure_window(&window);
+            let focus_window = window.clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::Focused(focused) = event {
+                    let _ = focus_window.eval(&format!(
+                        "window.dispatchEvent(new CustomEvent('work-twin-window-focus', {{ detail: {{ focused: {} }} }}))",
+                        focused
+                    ));
+                }
+            });
             app.on_menu_event(|app, event| match event.id().as_ref() {
                 "pet-toggle" => toggle_from_menu(app),
                 "pet-quit" => app.exit(0),

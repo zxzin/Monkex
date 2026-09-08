@@ -29,13 +29,11 @@
   }
 
   class ReadPlay {
-    constructor({getContext,celebrate=()=>{},document:doc=scope.document,storage,clock=()=>Date.now()}={}){
-      if(storage===undefined)try{storage=scope.localStorage;}catch{}
-      this.getContext=getContext;this.celebrate=celebrate;this.doc=doc;this.storage=storage;this.clock=clock;
-      this.ledger=new ReadPlayLedger();this.timers=new Set();this.animations=new Set();this.enabled=true;this.epoch=0;
+    constructor({getContext,celebrate=()=>{},document:doc=scope.document,clock=()=>Date.now()}={}){
+      this.getContext=getContext;this.celebrate=celebrate;this.doc=doc;this.clock=clock;
+      this.ledger=new ReadPlayLedger();this.timers=new Set();this.animations=new Set();this.epoch=0;
       this.collected=0;this.landed=0;this.flights=new Set();this.catchRevision=0;this.toastTimer=null;
       this.weeklyHarvest=null;
-      try{this.enabled=storage?.getItem('twin-play-feedback')!=='false';}catch{}
       this.monkey=doc.getElementById('greetMonkey');
       this.monkeyTitle=this.monkey?.title||'香蕉老板，准备收获';
       this.pocket=doc.createElement('span');this.pocket.className='harvest-pocket';this.pocket.hidden=true;
@@ -45,17 +43,6 @@
       this.motionQuery=scope.matchMedia?.('(prefers-reduced-motion: reduce)');
       this.onMotion=()=>{if(this.motionQuery?.matches)this.clear();};
       this.motionQuery?.addEventListener?.('change',this.onMotion);
-      this.toggle=doc.getElementById('playFeedbackToggle');
-      if(this.toggle)this.toggle.onclick=()=>this.setEnabled(!this.enabled);
-      this.syncToggle();
-    }
-    syncToggle(){
-      if(this.toggle){
-        this.toggle.setAttribute('aria-pressed',String(this.enabled));
-        this.toggle.title=this.enabled?'关闭收香蕉动效':'开启收香蕉动效';
-        this.toggle.setAttribute('aria-label',this.toggle.title);
-      }
-      this.doc.getElementById('appShell')?.setAttribute('data-play',String(this.enabled));
       this.syncPocket();
     }
     setWeeklyHarvest(value){
@@ -70,20 +57,19 @@
       this.pocket.hidden=false;
       this.pocket.textContent=count===null?'—':String(count);
       this.pocket.dataset.digits=String(this.pocket.textContent.length);
-      if(this.monkey)this.monkey.title=this.monkeyTitle+' · 本周已收 '+(count===null?'待同步':count+' 根')+' · 每周一 00:00 重置（本机时间）';
-    }
-    setEnabled(enabled){
-      this.enabled=enabled;this.clear();this.ledger.reset();this.syncToggle();
-      try{this.storage?.setItem('twin-play-feedback',String(enabled));}catch{}
+      if(this.monkey){
+        this.monkey.title=this.monkeyTitle+' · 本周已收 '+(count===null?'待同步':count+' 根')+' · 每周一 00:00 重置（本机时间）';
+        this.monkey.setAttribute('role','img');this.monkey.setAttribute('aria-label',this.monkey.title);
+      }
     }
     arm(card){
       const context=this.getContext();
-      if(this.enabled&&context.connected&&!this.doc.hidden)this.ledger.arm(card,this.clock());
+      if(context.connected&&!this.doc.hidden)this.ledger.arm(card,this.clock());
     }
     cancel(id){this.ledger.cancel(id);}
     later(fn,delay){const id=scope.setTimeout(()=>{this.timers.delete(id);fn();},delay);this.timers.add(id);return id;}
     cancelTimer(id){if(id!==null){scope.clearTimeout(id);this.timers.delete(id);}}
-    canPlay(){const c=this.getContext();return this.enabled&&c.connected&&!this.doc.hidden&&c.mode!=='collapsed';}
+    canPlay(){const c=this.getContext();return c.connected&&!this.doc.hidden&&c.mode!=='collapsed';}
     showToast(combo){
       const toast=this.doc.getElementById('readPlayToast');if(!toast||!this.canPlay())return;
       const context=this.getContext(),cleared=context.filter!=='history'&&context.unreadRemaining===0&&this.landed===this.collected;
@@ -116,7 +102,7 @@
     }
     confirm(receipt,card){
       const context=this.getContext();
-      if(!this.enabled||!context.connected||this.doc.hidden||context.mode==='collapsed'){this.cancel(receipt?.threadId);return;}
+      if(!context.connected||this.doc.hidden||context.mode==='collapsed'){this.cancel(receipt?.threadId);return;}
       const reward=this.ledger.confirm(receipt,card,this.clock());if(!reward)return;
       this.collected++;
       const epoch=this.epoch;
@@ -160,7 +146,7 @@
       if(context.mode==='compact'&&context.filter==='board'){
         const positions=rows.filter(r=>r!==row&&r.dataset.status!=='running').map(r=>[r,r.getBoundingClientRect().top]);
         scope.requestAnimationFrame(()=>{
-          if(epoch!==this.epoch||!this.enabled||this.doc.hidden)return;
+          if(epoch!==this.epoch||this.doc.hidden)return;
           for(const [element,top] of positions){
             if(!element.isConnected)continue;
             const dy=top-element.getBoundingClientRect().top;

@@ -10,6 +10,7 @@
   --sage:#8da58d; --sage-soft:#e1ebdc; --glass:rgba(242,248,237,.92);
   --hud-font:ui-monospace,"SFMono-Regular",Menlo,monospace;
   --banana-image:url('/shell/assets/monkey-banana-2026-09-07/pixel-banana-v4-diagonal.png');
+  --banana-peel-image:url('/shell/assets/monkey-banana-2026-09-07/pixel-banana-peel-v1.png');
   --banana-green-image:url('/shell/assets/monkey-banana-2026-09-07/pixel-banana-green-v1.png');
   --banana-tree-image:url('/shell/assets/monkey-banana-2026-09-07/banana-tree.png');
   --banana-ripe-size:16px; --banana-unripe-size:12px;
@@ -29,7 +30,6 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .app-shell{width:344px;height:min(var(--board-height,420px),calc(100dvh - 48px));min-height:180px;margin:24px auto;display:flex;flex-direction:column;background:var(--paper);border:1px solid #fff;border-radius:22px;box-shadow:0 12px 35px #25492214,0 0 0 1px #25492210,inset 0 1px 0 #fff;overflow:hidden}
 .topbar{display:flex;align-items:center;gap:6px;padding:8px 11px;flex:none}
 .brand-pet{position:relative;width:34px;height:34px;flex:none;padding:0;border-radius:12px;background:transparent;box-shadow:none;transition:background 150ms ease}
-.brand-pet:hover:not(:disabled){background:#ffedac}
 .brand-pet .monkey-art{display:block;width:34px;height:36px;margin-top:-3px}
 .harvest-pocket{position:absolute;right:-3px;bottom:-3px;min-width:17px;padding:1px 3px;background:var(--yellow);color:var(--yellow-ink);box-shadow:inset 0 0 0 1px #dfb62d;border-radius:4px;font:800 10px/14px var(--hud-font);font-variant-numeric:tabular-nums;pointer-events:none}
 .harvest-pocket[data-digits="3"]{font-size:9px}
@@ -66,14 +66,6 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .pin-button[aria-pressed=true] .pin-shadow{opacity:.25}
 .pin-button:active{transform:translateY(2px) scale(.92)}
 .icon-button svg{display:block;width:18px;height:18px;margin:auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.board-settings{flex:none;margin:0 10px 8px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:#fbfdf8}
-.board-settings label{display:block;font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px}
-.board-settings input{width:100%;min-width:0;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-size:11px;color:var(--ink)}
-.feedback-setting{display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:8px;padding:5px 0;font-size:11px}
-.switch-track{position:relative;width:27px;height:16px;background:var(--sage);border-radius:6px;transition:background 160ms ease}
-.switch-track::after{content:"";position:absolute;left:3px;top:3px;width:10px;height:10px;border-radius:3px;background:#fff;box-shadow:0 1px 2px #17151215;transition:transform 160ms ease}
-.feedback-setting[aria-pressed=true] .switch-track{background:var(--green-ink)}
-.feedback-setting[aria-pressed=true] .switch-track::after{transform:translateX(11px)}
 .task-button:last-child{margin-bottom:0}
 .feed-view{display:flex;flex:1;flex-direction:column;min-height:0}
 .filters{display:flex;gap:4px;padding:0;margin:0 10px 8px;min-height:28px;background:transparent}
@@ -99,18 +91,17 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .task-button[data-status=running] .task-state::before{transform-origin:50% 65%;animation:banana-growing 2.2s steps(4,end) var(--growth-delay) infinite}
 @keyframes banana-growing{0%,100%{transform:translateY(0) rotate(-5deg)}35%{transform:translateY(-1px) rotate(5deg)}65%{transform:translateY(0) rotate(-2deg)}}
 @media(prefers-reduced-motion:reduce){.task-button[data-status=running] .task-state::before{transform:none}}
-.task-button[data-status=unread] .task-state{background:var(--yellow-ink);clip-path:polygon(2px 0,9px 0,9px 2px,11px 2px,11px 9px,9px 9px,9px 11px,2px 11px,2px 9px,0 9px,0 2px,2px 2px)}
-.task-button[data-status=unread] .task-state::after{content:"";position:absolute;left:2px;top:2px;width:3px;height:2px;background:#fff9}
-.app-shell[data-play=true] .task-button[data-status=unread] .task-state{background:transparent;clip-path:none;--banana-sprite:var(--banana-image);--banana-size:var(--banana-ripe-size)}
+.app-shell .task-button[data-status=unread] .task-state{background:transparent;clip-path:none;--banana-sprite:var(--banana-image);--banana-size:var(--banana-ripe-size)}
 /* A shared title-line slot keeps green growth and ripe harvest optically aligned. */
-.task-button[data-status=running] .task-state,.app-shell[data-play=true] .task-button[data-status=unread] .task-state{height:16px;margin-top:0}
-.task-button[data-status=running] .task-state::before,.app-shell[data-play=true] .task-button[data-status=unread] .task-state::after{content:"";position:absolute;left:50%;top:50%;width:var(--banana-size);height:var(--banana-size);margin-left:calc(var(--banana-size) * -.5);margin-top:calc(var(--banana-size) * -.5);background:var(--banana-sprite) center/contain no-repeat;image-rendering:pixelated}
-.app-shell[data-play=true] .task-button[data-status=unread] .task-state{transition:transform 160ms cubic-bezier(.2,.8,.3,1)}
-.app-shell[data-play=true] .task-button[data-status=unread]:is(:hover,:focus-visible){background:var(--fruit-hover);border-color:var(--fruit-rim)}
-.app-shell[data-play=true] .task-button[data-status=unread]:is(:hover,:focus-visible) .task-state{transform:translateY(-2px) rotate(-12deg) scale(1.2)}
-.app-shell[data-play=true] .task-button[data-status=unread]:active{background:#ffedb1;transform:scale(.98)}
-.app-shell[data-play=true] .task-button[data-status=unread]:active .task-state{transform:translateY(1px) rotate(7deg) scale(.82)}
-.task-button[data-status=read] .task-state::after{content:"";position:absolute;left:1px;top:5px;width:2px;height:2px;background:var(--sage);box-shadow:2px 2px var(--sage),4px 0 var(--sage),6px -2px var(--sage),8px -4px var(--sage)}
+.task-button[data-status=running] .task-state,.app-shell .task-button[data-status=unread] .task-state{height:16px;margin-top:0}
+.task-button[data-status=running] .task-state::before,.app-shell .task-button[data-status=unread] .task-state::after{content:"";position:absolute;left:50%;top:50%;width:var(--banana-size);height:var(--banana-size);margin-left:calc(var(--banana-size) * -.5);margin-top:calc(var(--banana-size) * -.5);background:var(--banana-sprite) center/contain no-repeat;image-rendering:pixelated}
+.app-shell .task-button[data-status=unread] .task-state{transition:transform 160ms cubic-bezier(.2,.8,.3,1)}
+.app-shell .task-button[data-status=unread]:is(:hover,:focus-visible){background:var(--fruit-hover);border-color:var(--fruit-rim)}
+.app-shell .task-button[data-status=unread]:is(:hover,:focus-visible) .task-state{transform:translateY(-2px) rotate(-12deg) scale(1.2)}
+.app-shell .task-button[data-status=unread]:active{background:#ffedb1;transform:scale(.98)}
+.app-shell .task-button[data-status=unread]:active .task-state{transform:translateY(1px) rotate(7deg) scale(.82)}
+.task-button[data-status=read] .task-state{height:16px;margin-top:0}
+.task-button[data-status=read] .task-state::after{content:"";position:absolute;left:50%;top:50%;width:16px;height:16px;transform:translate(-50%,-50%);background:var(--banana-peel-image) center/contain no-repeat;image-rendering:pixelated;filter:saturate(.65);opacity:.8}
 .task-button[aria-pressed=true] .task-copy strong::before{content:"";display:inline-block;width:6px;height:10px;margin-right:4px;background:var(--green-ink);clip-path:polygon(0 0,2px 0,2px 2px,4px 2px,4px 4px,6px 4px,6px 6px,4px 6px,4px 8px,2px 8px,2px 10px,0 10px)}
 .task-copy{min-width:0;flex:1}
 .task-title-line{display:flex;gap:6px;align-items:center;min-width:0}
@@ -132,9 +123,6 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 @keyframes fan-spin{to{transform:rotate(360deg)}}
 .feed-footer{display:flex;align-items:center;justify-content:space-between;padding:5px 9px}
 .app-shell{position:relative}
-.play-toggle{width:24px;height:26px;flex:none;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
-.play-toggle svg{width:14px;height:12px}
-.play-toggle[aria-pressed=true]{background:var(--yellow-soft);color:var(--yellow-ink)}
 .read-play-layer{position:absolute;inset:0;z-index:12;pointer-events:none;overflow:hidden;border-radius:inherit}
 .read-flight{position:absolute;inset:0;pointer-events:none;--harvest-color:var(--yellow-ink);--harvest-tint:#fff0ac}
 .read-flight[data-tier="2"]{--harvest-color:var(--green-ink);--harvest-tint:var(--green-soft)}
@@ -167,7 +155,7 @@ html.pet-mode,html.pet-mode body{background:transparent;min-width:76px}
 .pet-mode[data-mode=collapsed] .app-shell{display:none}
 .pet-mode[data-mode=compact] .topbar{padding-block:8px}
 @media(max-width:480px){.app-shell{width:100%;height:min(var(--board-height,420px),100dvh);margin:0;border-radius:18px;min-height:0}}
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.app-shell[data-play=true] .task-button[data-status=unread]:is(:hover,:focus-visible,:active) .task-state,.app-shell[data-play=true] .task-button[data-status=unread]:active{transform:none}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.app-shell .task-button[data-status=unread]:is(:hover,:focus-visible,:active) .task-state,.app-shell .task-button[data-status=unread]:active{transform:none}}
 @media(prefers-reduced-transparency:reduce){.app-shell{background:#fff!important;backdrop-filter:none!important}}
 .pet-launcher {
   position: absolute;
@@ -180,7 +168,9 @@ html.pet-mode,html.pet-mode body{background:transparent;min-width:76px}
   border-radius: 8px;
   background: transparent;
   box-shadow: none;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
   isolation: isolate;
 }
 
@@ -337,31 +327,4 @@ html[data-page-hidden=true] .quota-coin,.pet-mode[data-mode=collapsed] .quota-co
   opacity: 0.72;
 }
 
-.pet-drag-handle {
-  position: absolute;
-  top: 2px;
-  left: 24px;
-  z-index: 8;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 11px;
-  cursor: grab;
-}
-
-.pet-drag-handle:active {
-  cursor: grabbing;
-}
-
-.pet-drag-handle i {
-  width: 13px;
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(37, 73, 34, 0.3);
-  opacity: 0;
-  transition: opacity 120ms ease-out;
-}
-
-.pet-shell:hover .pet-drag-handle i {
-  opacity: 1;
-}
+.pet-launcher:active{cursor:grabbing}

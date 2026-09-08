@@ -7,6 +7,23 @@ def bucket(used=62, duration=10080):
 
 
 class WeeklyQuotaTests(unittest.TestCase):
+    def test_manual_refresh_reads_quota_and_returns_board_without_task_actions(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import Mock
+        from twin_shell.orchestrator import WorkTwinShell
+        client = Mock(running=True)
+        client.request.return_value = {"result": {"rateLimits": bucket(8)}}
+        with tempfile.TemporaryDirectory() as temporary:
+            shell = WorkTwinShell(state_path=Path(temporary) / "state.json", client=client)
+            shell._feed_thread = object()
+            shell._feed_snapshot = {"threads": [{"id": "example", "unread": True}]}
+            result = shell.refresh_dashboard()
+            self.assertEqual(result["health"]["usage"]["weekly"]["remaining_percent"], 92)
+            self.assertTrue(result["threads"][0]["unread"])
+            client.request.assert_called_once_with("account/rateLimits/read", None)
+            self.assertFalse(shell.state_path.exists())
+
     def test_remaining_is_one_hundred_minus_used(self):
         value = weekly_quota({"result": {"rateLimits": bucket()}}, now=100)
         self.assertEqual(value["remaining_percent"], 38)

@@ -21,8 +21,8 @@ const ripeSize=Number(css.match(/--banana-ripe-size:(\d+)px/)[1]),unripeSize=Num
 assert.equal(ripeSize,16);assert.equal(unripeSize,12);assert.ok(unripeSize<ripeSize,'growing green bananas are smaller than ripe fruit');
 assert.match(css,/--banana-green-image:url\('[^']*pixel-banana-green-v1\.png'\)/);
 assert.match(css,/\.task-button\[data-status=running\] \.task-state\{--banana-sprite:var\(--banana-green-image\);--banana-size:var\(--banana-unripe-size\)/);
-assert.match(css,/\.task-button\[data-status=running\] \.task-state,\.app-shell\[data-play=true\] \.task-button\[data-status=unread\] \.task-state\{height:16px;margin-top:0\}/);
-assert.match(css,/\.task-button\[data-status=running\] \.task-state::before,\.app-shell\[data-play=true\] \.task-button\[data-status=unread\] \.task-state::after\{[^}]*left:50%;top:50%;[^}]*margin-left:calc\(var\(--banana-size\) \* -.5\);margin-top:calc\(var\(--banana-size\) \* -.5\)/);
+assert.match(css,/\.task-button\[data-status=running\] \.task-state,\.app-shell \.task-button\[data-status=unread\] \.task-state\{height:16px;margin-top:0\}/);
+assert.match(css,/\.task-button\[data-status=running\] \.task-state::before,\.app-shell \.task-button\[data-status=unread\] \.task-state::after\{[^}]*left:50%;top:50%;[^}]*margin-left:calc\(var\(--banana-size\) \* -.5\);margin-top:calc\(var\(--banana-size\) \* -.5\)/);
 assert.match(css,/\.task-button\[data-status=running\] \.task-state::before\{[^}]*animation:banana-growing 2.2s steps\(4,end\)/);
 assert.match(css,/@keyframes banana-growing\{0%,100%\{transform:translateY\(0\) rotate\(-5deg\)\}35%\{transform:translateY\(-1px\) rotate\(5deg\)/);
 assert.ok(!/task-running|hourglass-grain|running-hourglass|energy-work|energy-pixels|running-energy/.test(css),'superseded loaders have no live style path');

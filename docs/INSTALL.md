@@ -8,13 +8,13 @@ macOS 可运行 shasum -a 256 文件路径；Windows PowerShell 可运行 Get-Fi
 
 ## macOS Apple Silicon
 
-下载 Monkex-macOS-arm64.zip，解压完整 Monkex.app，复制到 ~/Applications 或系统“应用程序”。升级前正常退出旧版并保留旧应用备份，保留用户数据。双击启动，桌面角落出现香蕉树。
+下载 Monkex-macOS-arm64.zip，解压完整 Monkex.app，复制到 ~/Applications 或系统“应用程序”。升级前正常退出旧版并保留旧应用备份，保留用户数据。双击启动，主屏工作区右下角出现香蕉树；运行时不显示 Dock 图标。右键香蕉树选择“退出 Monkex”。
 
 当前预览包为 ad-hoc 签名，未进行 Apple 公证。核验来源和哈希后，由用户通过系统界面决定是否允许打开；不要关闭安全防护或自动删除隔离属性。
 
 ## Windows x64
 
-下载 Monkex-Windows-x64-setup.exe，双击进行当前用户安装；WebView2 缺失时安装器会尝试联网补齐。之后从开始菜单打开 Monkex。
+下载 Monkex-Windows-x64-setup.exe，双击进行当前用户安装；WebView2 缺失时安装器会尝试联网补齐。之后从开始菜单打开 Monkex，主屏工作区右下角出现香蕉树，窗口不占任务栏。整棵树按住拖动、轻点展开；右键香蕉树选择“退出 Monkex”。
 
 未签名包可能触发 SmartScreen，由用户核验来源并决定。真实 Codex 跳转和已读同步需要在实际电脑验证，CI 通过不等于完整真机验收。
 
