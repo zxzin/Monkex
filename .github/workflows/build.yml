@@ -94,6 +94,7 @@ jobs:
         shell: bash
         run: |
           gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
             --title "Monkex $GITHUB_REF_NAME Preview" \
             --prerelease \
             --notes "Windows x64 and macOS Apple Silicon preview installers. Both platform jobs passed the Python and UI regressions plus packaged-backend smoke tests. Windows additionally passed a current-user NSIS install and launch smoke test. The Windows package remains unsigned and the macOS app remains ad-hoc signed and unnotarized; review the installation guide before acknowledging platform security prompts."
