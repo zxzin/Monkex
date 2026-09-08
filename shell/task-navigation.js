@@ -26,6 +26,7 @@
         try{
           const receipt=await this.api('/api/threads/'+encodeURIComponent(id)+'/ack',{version});
           if(receipt?.ok!==true)throw Error('未收到保存回执');
+          this.readPlay?.setWeeklyHarvest?.(receipt.weekly_harvest);
           const card=this.getCard(id);
           if(matches(card)){
             card.unread=false;card.pending_result_version=null;

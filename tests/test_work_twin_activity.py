@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import datetime
 import importlib.util
 import json
 from pathlib import Path
@@ -131,6 +132,45 @@ class ActivityTests(unittest.TestCase):
     def owned(self):
         self.shell._connected_threads.add("thread-0")
         return self.shell.read_thread("thread-0")["card"]
+
+    def test_weekly_harvest_persists_and_deduplicates_successful_receipts(self):
+        card = self.shell.read_thread("thread-0")["card"]
+        version = card["result_version"]
+        self.assertEqual(self.shell.weekly_harvest()["count"], 0)
+        response = self.shell.acknowledge_result("thread-0", version)
+        self.assertEqual(response["weekly_harvest"]["count"], 1)
+        self.shell.acknowledge_result("thread-0", version)
+        self.assertEqual(self.shell.weekly_harvest()["count"], 1)
+        restored = WorkTwinShell(state_path=self.root / "state.json", client=self.client)
+        self.assertEqual(restored.list_threads()["weekly_harvest"]["count"], 1)
+        self.assertEqual(restored.acknowledge_result("thread-0", version)["weekly_harvest"]["count"], 1)
+
+    def test_weekly_harvest_uses_local_monday_and_resets_across_years(self):
+        self.shell._state["weekly_harvest"] = {"week_start": "2026-12-28", "count": 125}
+        self.assertEqual(self.shell.weekly_harvest(datetime(2027, 1, 3, 23, 59, 59))["count"], 125)
+        self.assertEqual(self.shell.weekly_harvest(datetime(2027, 1, 4)), {"week_start": "2027-01-04", "count": 0})
+        with mock.patch("twin_shell.orchestrator.datetime") as clock:
+            clock.now.return_value.astimezone.return_value = datetime(2027, 1, 4)
+            card = self.shell.read_thread("thread-0")["card"]
+            self.assertEqual(self.shell.acknowledge_result("thread-0", card["result_version"])["weekly_harvest"]["count"], 1)
+
+    def test_weekly_harvest_save_failure_rolls_back_count_and_receipt(self):
+        card = self.shell.read_thread("thread-0")["card"]
+        with mock.patch.object(self.shell, "_save_state", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                self.shell.acknowledge_result("thread-0", card["result_version"])
+        self.assertEqual(self.shell.weekly_harvest()["count"], 0)
+        self.assertNotEqual(self.shell._state["observations"]["thread-0"].get("ack_version"), card["result_version"])
+        self.assertEqual(self.shell.acknowledge_result("thread-0", card["result_version"])["weekly_harvest"]["count"], 1)
+
+    def test_automatic_read_sync_and_invalid_receipts_do_not_add_harvest(self):
+        card = self.shell.read_thread("thread-0")["card"]
+        with self.assertRaises(ValueError):
+            self.shell.acknowledge_result("thread-0", "outdated-result")
+        self.assertEqual(self.shell.weekly_harvest()["count"], 0)
+        self.shell._state["observations"]["thread-0"]["ack_version"] = card["result_version"]
+        self.shell._save_state()
+        self.assertEqual(self.shell.acknowledge_result("thread-0", card["result_version"])["weekly_harvest"]["count"], 0)
 
     def send(self, card, request="request-0001", text="请复核界面", **extra):
         return self.shell.send_message("thread-0", text, request_id=request, context_version=card["context_version"], **extra)

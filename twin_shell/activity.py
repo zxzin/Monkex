@@ -73,15 +73,31 @@ class ActivityFeed:
             card["unread"] = bool(entry.get("result_version") and entry.get("result_version") != entry.get("ack_version"))
             card["pending_result_version"] = entry.get("result_version") if card["unread"] else None
 
-    def acknowledge(self, thread_id: str, version: str) -> None:
+    def acknowledge(self, thread_id: str, version: str) -> dict[str, Any]:
         shell = self.shell
         with shell._state_lock:
             entry = shell._state["observations"].get(thread_id, {})
             if not version or entry.get("result_version") != version:
                 raise ValueError("结果已更新，请重新查看后再标记")
-            entry["ack_version"] = version
-            shell._save_state()
+            harvest = shell.weekly_harvest()
+            if entry.get("ack_version") != version:
+                previous_entry = deepcopy(entry)
+                previous_harvest = deepcopy(shell._state.get("weekly_harvest"))
+                harvest["count"] += 1
+                entry["ack_version"] = version
+                shell._state["weekly_harvest"] = harvest
+                try:
+                    shell._save_state()
+                except Exception:
+                    entry.clear()
+                    entry.update(previous_entry)
+                    if previous_harvest is None:
+                        shell._state.pop("weekly_harvest", None)
+                    else:
+                        shell._state["weekly_harvest"] = previous_harvest
+                    raise
         self.cache.pop(thread_id, None)
+        return dict(harvest)
 
     def collect(self) -> dict[str, Any]:
         shell = self.shell

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import hashlib
 import os
@@ -161,6 +161,16 @@ class WorkTwinShell:
             "old_monitoring_services": "disabled",
             "at": _utc_now(),
         }
+
+    def weekly_harvest(self, now: datetime | None = None) -> dict[str, Any]:
+        local_date = (now or datetime.now().astimezone()).date()
+        week = (local_date - timedelta(days=local_date.weekday())).isoformat()
+        with self._state_lock:
+            saved = self._state.get("weekly_harvest", {})
+            count = saved.get("count", 0) if isinstance(saved, dict) and saved.get("week_start") == week else 0
+            if type(count) is not int or count < 0:
+                count = 0
+        return {"week_start": week, "count": count}
 
     def predict_route(self, instruction: str, workspace_type: str = "other") -> dict[str, Any]:
         clean_instruction = instruction.strip()
@@ -331,6 +341,7 @@ class WorkTwinShell:
         with self._feed_lock:
             result = deepcopy(self._feed_snapshot)
         result["health"] = self.health()
+        result["weekly_harvest"] = self.weekly_harvest()
         result["observed_at"] = self._feed_at or None
         result["stale"] = bool(self._feed_at and time.time() - self._feed_at > 30)
         if result.get("error") or result["stale"] or not self.client.running:
@@ -358,13 +369,13 @@ class WorkTwinShell:
         return self.feed.detail(thread_id, force=True)
 
     def acknowledge_result(self, thread_id: str, version: str) -> dict[str, Any]:
-        self.feed.acknowledge(thread_id, version)
+        harvest = self.feed.acknowledge(thread_id, version)
         with self._feed_lock:
             for card in self._feed_snapshot.get("threads", []):
                 if card.get("id") == thread_id and card.get("pending_result_version") == version:
                     card["unread"] = False
                     card["pending_result_version"] = None
-        return {"ok": True}
+        return {"ok": True, "weekly_harvest": harvest}
 
     def open_thread(self, thread_id: str) -> dict[str, Any]:
         import re

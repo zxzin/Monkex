@@ -78,6 +78,11 @@ async function run(){
   f=fixture([card('a'),card('b')]);await Promise.all([f.nav.navigate('a'),f.nav.navigate('b')]);
   assert.equal(f.calls[0].url,'/api/threads/b/open','queued stale intent never dispatches');
 
+  f=fixture();const totals=[];
+  f.nav.readPlay={arm(){},cancel(){},confirm(){},setWeeklyHarvest:value=>totals.push(value)};
+  const weekly={week_start:'2026-09-07',count:18};
+  f.api=async url=>url.endsWith('/ack')?{ok:true,weekly_harvest:weekly}:{ok:true};
+  await f.nav.navigate('a');assert.deepEqual(totals,[weekly],'persisted weekly count updates even when feedback is a no-op');
   const root=path.join(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
   const config=JSON.parse(read('desktop_shell/src-tauri/tauri.conf.json'));
   assert.deepEqual(config.app.windows.map(w=>w.label),['main']);

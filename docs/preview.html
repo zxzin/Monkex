@@ -3,6 +3,8 @@
 // Renders production UI with explicit public sample data, never local Codex data.
 function demoBootstrap(){
   const now=Date.now()/1000;
+  const monday=new Date();monday.setDate(monday.getDate()-(monday.getDay()+6)%7);
+  const harvest={week_start:monday.getFullYear()+'-'+String(monday.getMonth()+1).padStart(2,'0')+'-'+String(monday.getDate()).padStart(2,'0'),count:12};
   const definitions=[
     ['完成个人作品集首页','已完成响应式布局与作品展示','unread',180],
     ['检查新版本发布清单','整理安装包、变更记录和使用说明','unread',540],
@@ -12,7 +14,7 @@ function demoBootstrap(){
     ['整理项目使用文档','正在编写安装与快速开始指南','running',20],
   ];
   const threads=definitions.map(([name,summary,status,age],i)=>({id:'public-demo-'+i,name,summary,status:status==='running'?'running':'completed',unread:status==='unread',project_label:'Demo project',updated_at:now-age,runtime_observed_at:now-age,tokens:{ready:true,tokens_per_min:status==='running'?(i===4?182400:76400):0,last_report_at:now},result_version:'demo-1'}));
-  window.fetch=async()=>({ok:true,json:async()=>({threads,observed_at:now,health:{app_server:'online',usage:{weekly:{available:true,remaining_percent:68,observed_at:Date.now()/1000,resets_at:now+604800}}},coverage:{external_runtime:'local_events'}})});
+  window.fetch=async()=>({ok:true,json:async()=>({threads,weekly_harvest:harvest,observed_at:now,health:{app_server:'online',usage:{weekly:{available:true,remaining_percent:68,observed_at:Date.now()/1000,resets_at:now+604800}}},coverage:{external_runtime:'local_events'}})});
   window.EventSource=class{addEventListener(){} close(){}};
   localStorage.removeItem('twin-pinned');
   window.addEventListener('load',()=>{

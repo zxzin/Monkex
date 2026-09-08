@@ -1,5 +1,10 @@
 /* Local, receipt-bound reading feedback. This module never calls a task API. */
 (function(scope){
+  function localWeekStart(now){
+    const date=new Date(now);
+    date.setDate(date.getDate()-(date.getDay()+6)%7);
+    return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+  }
   class ReadPlayLedger {
     constructor(){this.pending=new Map();this.seen=new Set();this.combo=0;this.lastAt=0;}
     arm(card,now){
@@ -29,12 +34,13 @@
       this.getContext=getContext;this.celebrate=celebrate;this.doc=doc;this.storage=storage;this.clock=clock;
       this.ledger=new ReadPlayLedger();this.timers=new Set();this.animations=new Set();this.enabled=true;this.epoch=0;
       this.collected=0;this.landed=0;this.flights=new Set();this.catchRevision=0;this.toastTimer=null;
+      this.weeklyHarvest=null;
       try{this.enabled=storage?.getItem('twin-play-feedback')!=='false';}catch{}
       this.monkey=doc.getElementById('greetMonkey');
       this.monkeyTitle=this.monkey?.title||'香蕉老板，准备收获';
       this.pocket=doc.createElement('span');this.pocket.className='harvest-pocket';this.pocket.hidden=true;
       this.pocket.setAttribute('aria-hidden','true');this.monkey?.append(this.pocket);
-      this.onVisibility=()=>{if(doc.hidden)this.suspend();};
+      this.onVisibility=()=>{if(doc.hidden)this.suspend();else this.syncPocket();};
       doc.addEventListener?.('visibilitychange',this.onVisibility);
       this.motionQuery=scope.matchMedia?.('(prefers-reduced-motion: reduce)');
       this.onMotion=()=>{if(this.motionQuery?.matches)this.clear();};
@@ -52,10 +58,19 @@
       this.doc.getElementById('appShell')?.setAttribute('data-play',String(this.enabled));
       this.syncPocket();
     }
+    setWeeklyHarvest(value){
+      const week=localWeekStart(this.clock());
+      if(!value||value.week_start!==week||!Number.isSafeInteger(value.count)||value.count<0)return;
+      if(this.weeklyHarvest?.week_start===week&&value.count<this.weeklyHarvest.count)return;
+      this.weeklyHarvest={week_start:week,count:value.count};this.syncPocket();
+    }
     syncPocket(){
-      this.pocket.hidden=!this.enabled||this.landed===0;
-      this.pocket.textContent=this.landed>99?'99+':String(this.landed);
-      if(this.monkey)this.monkey.title=this.enabled&&this.landed?this.monkeyTitle+' · 本次已收 '+this.landed+' 根':this.monkeyTitle;
+      const week=localWeekStart(this.clock());
+      const count=this.weeklyHarvest?(this.weeklyHarvest.week_start===week?this.weeklyHarvest.count:0):null;
+      this.pocket.hidden=false;
+      this.pocket.textContent=count===null?'—':String(count);
+      this.pocket.dataset.digits=String(this.pocket.textContent.length);
+      if(this.monkey)this.monkey.title=this.monkeyTitle+' · 本周已收 '+(count===null?'待同步':count+' 根')+' · 每周一 00:00 重置（本机时间）';
     }
     setEnabled(enabled){
       this.enabled=enabled;this.clear();this.ledger.reset();this.syncToggle();
@@ -157,6 +172,6 @@
       }
     }
   }
-  if(typeof module!=='undefined'&&module.exports)module.exports={ReadPlayLedger,ReadPlay};
+  if(typeof module!=='undefined'&&module.exports)module.exports={ReadPlayLedger,ReadPlay,localWeekStart};
   else scope.WorkTwinReadPlay=ReadPlay;
 })(typeof window==='undefined'?globalThis:window);

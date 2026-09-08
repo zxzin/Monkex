@@ -183,6 +183,7 @@ function mode(value) {
   else if(state.petMode)invokeDesktop("set_pet_view",{view:value}).catch(e=>banner("窗口调整失败："+e));
 }
 function updateCounts() {
+  state.readPlay?.syncPocket();
   if(!state.connected)state.readPlay?.suspend();
   $("connectionDot").dataset.connected=String(state.connected);
   const connectionLabel=state.connected?"已连接 Codex；点击任务打开原对话":"连接中断，保留上次记录";
@@ -277,10 +278,12 @@ function renderList(force=false) {
   syncBoardSize();
 }
 async function refresh() {
+  state.readPlay?.syncPocket();
   if(state.refreshing)return;
   state.refreshing=true;
   try{
     const data=await api("/api/threads");
+    state.readPlay?.setWeeklyHarvest(data.weekly_harvest);
     state.threads=data.threads||[];
     state.connected=data.health?.app_server==="online" && !data.error && !data.stale && !data.loading;
     $("connectionText").textContent=data.loading?"正在整理任务":state.connected?(data.coverage?.external_runtime==="local_events"?"Codex 已连接 · 正在同步运行状态":"Codex 已连接 · 部分状态待确认"):"同步中断 · 保留上次状态";

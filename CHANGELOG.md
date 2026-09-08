@@ -2,6 +2,8 @@
 
 ## 0.1.1 Preview
 
+- Avatar badge now shows persisted calendar-week banana collections (local Monday to Sunday), independent of animation preferences and deduplicated by read receipt.
+
 - Removed additional AI task-summary generation, its background worker and configuration switch. The board displays existing Codex progress text.
 
 - Banana planter footer with live weekly quota, aligned below tree roots.
