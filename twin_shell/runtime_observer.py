@@ -13,6 +13,7 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
+import sys
 import threading
 import time
 from typing import Any
@@ -91,7 +92,7 @@ class LocalRuntimeObserver:
                     continue
                 path_value, database_updated_at = thread_metadata
                 try:
-                    path = Path(path_value).resolve()
+                    path = _resolve_rollout_path(path_value)
                     if not path.is_relative_to(self.root / "sessions"):
                         continue
                     stat = path.stat()
@@ -220,6 +221,16 @@ class LocalRuntimeObserver:
             if thread_id not in self._available or not cursor:
                 return TokenMeter().snapshot(self.clock())
             return cursor.tokens.snapshot(self.clock())
+
+
+def _resolve_rollout_path(value: str) -> Path:
+    path_value = str(value)
+    if sys.platform == "win32":
+        if path_value.startswith("\\\\?\\UNC\\"):
+            path_value = "\\\\" + path_value[8:]
+        elif path_value.startswith("\\\\?\\"):
+            path_value = path_value[4:]
+    return Path(path_value).resolve()
 
 
 def apply_runtime(card: dict[str, Any], evidence: dict[str, Any]) -> None:

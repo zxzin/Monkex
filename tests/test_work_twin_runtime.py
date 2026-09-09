@@ -47,6 +47,15 @@ class RuntimeTests(unittest.TestCase):
         self.observer = LocalRuntimeObserver(self.root, clock=lambda: self.now)
         self.assertEqual(self.observed()["status"], "running")
 
+    @unittest.skipUnless(os.name == "nt", "Windows extended-length paths")
+    def test_windows_extended_length_rollout_path_is_observed(self):
+        self.append("item_completed", turn_id="turn-1", item={"type": "Reasoning"})
+        extended_path = "\\\\?\\" + str(self.log)
+        with closing(sqlite3.connect(self.root / "state_5.sqlite")) as db, db:
+            db.execute("UPDATE threads SET rollout_path=? WHERE id=?", (extended_path, "thread-a"))
+        self.observer = LocalRuntimeObserver(self.root, clock=lambda: self.now)
+        self.assertEqual(self.observed()["status"], "running")
+
     def test_stale_rollout_without_fresh_database_timestamp_stays_skipped(self):
         self.append("item_completed", turn_id="turn-1", item={"type": "Reasoning"})
         stale = self.now - 3600
