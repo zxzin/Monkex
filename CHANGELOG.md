@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2 Preview
+
+- Windows standalone launch now discovers Codex Desktop's versioned per-user CLI directory and the Microsoft Store package resource without relying on Codex's process-only `PATH` injection.
+
 ## 0.1.1 Preview
 
 - Windows runtime discovery now uses Codex's state-database update time when an open rollout file retains an old modification time, so long-running desktop tasks remain visible as running while the observer keeps its bounded read window.

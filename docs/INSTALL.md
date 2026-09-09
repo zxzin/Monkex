@@ -16,6 +16,8 @@ macOS 可运行 shasum -a 256 文件路径；Windows PowerShell 可运行 Get-Fi
 
 下载 Monkex-Windows-x64-setup.exe，双击进行当前用户安装；WebView2 缺失时安装器会尝试联网补齐。之后从开始菜单打开 Monkex，主屏工作区右下角出现香蕉树，窗口不占任务栏。整棵树按住拖动、轻点展开；右键香蕉树选择“退出 Monkex”。
 
+Monkex 会自动发现 Codex Desktop 当前用户目录中的版本化 CLI，也兼容 Microsoft Store/MSIX 包内资源；从开始菜单独立启动不依赖 Codex 临时注入的 `PATH`。只有非标准安装仍需设置 `MONKEX_CODEX_PATH`。
+
 未签名包可能触发 SmartScreen，由用户核验来源并决定。真实 Codex 跳转和已读同步需要在实际电脑验证，CI 通过不等于完整真机验收。
 
 Intel Mac、Windows ARM64 与 Linux 当前没有对应附件，请暂停安装。
