@@ -6,7 +6,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB_FILES = ["index.html", "styles.css", "app.js", "banana-tree.js", "read-play.js", "task-navigation.js",
+WEB_FILES = ["index.html", "styles.css", "app.js", "banana-tree.js", "read-play.js", "task-navigation.js", "locale.js",
+    "en/index.html", "en/app.js", "en/banana-tree.js", "en/read-play.js", "en/task-navigation.js",
     "assets/monkey-banana-2026-09-07/banana-tree.png",
     "assets/monkey-banana-2026-09-07/gold-chain-monkey.png",
     "assets/monkey-banana-2026-09-07/pixel-banana-v4-diagonal.png",
@@ -17,6 +18,7 @@ WEB_FILES = ["index.html", "styles.css", "app.js", "banana-tree.js", "read-play.
 
 
 def main():
+    subprocess.run(["node", str(ROOT / "scripts/build_monkex_english.mjs"), "--app-only"], check=True)
     native = ROOT / "desktop_shell/src-tauri"
     output = ROOT / "build/monkex"
     output.mkdir(parents=True, exist_ok=True)

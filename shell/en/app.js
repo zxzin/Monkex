@@ -1,3 +1,4 @@
+const englishSystemMessage=value=>[["\u8bf7\u5b89\u88c5\u5e76\u767b\u5f55 Codex\uff1b\u627e\u4e0d\u5230\u7a0b\u5e8f\u65f6\u8bbe\u7f6e MONKEX_CODEX_PATH \u540e\u91cd\u542f Monkex","Install and sign in to Codex. If it cannot be found, set MONKEX_CODEX_PATH and restart Monkex."],["\u8bf7\u5148\u5b89\u88c5\u5e76\u767b\u5f55 Codex\uff1b\u53ef\u901a\u8fc7 MONKEX_CODEX_PATH \u6307\u5b9a Codex \u53ef\u6267\u884c\u6587\u4ef6","Install and sign in to Codex. Use MONKEX_CODEX_PATH for a nonstandard executable location."],["Codex App Server \u521d\u59cb\u5316\u5931\u8d25","Codex App Server initialization failed."],["Codex App Server \u8fde\u63a5\u5df2\u5173\u95ed","Codex App Server connection closed."],["Codex App Server \u5df2\u5173\u95ed","Codex App Server is closed."],["Codex App Server \u672a\u8fd0\u884c","Codex App Server is not running."],["\u4efb\u52a1\u540c\u6b65\u6682\u65f6\u4e2d\u65ad\uff0c\u4fdd\u7559\u4e0a\u6b21\u89c2\u6d4b\u7ed3\u679c","Task sync interrupted. Keeping the last observation."],["\u672c\u673a\u5de5\u4f5c\u5206\u8eab\u670d\u52a1\u53d1\u751f\u5185\u90e8\u9519\u8bef","The local Monkex service encountered an internal error."],["\u4ec5\u63a5\u53d7\u672c\u673a\u5de5\u4f5c\u5206\u8eab\u7a97\u53e3\u7684\u8bf7\u6c42","Only local Monkex window requests are accepted."],["\u8bf7\u6c42\u5fc5\u987b\u662f JSON \u5bf9\u8c61","The request must be a JSON object."],["\u5de5\u4f5c\u5206\u8eab\u58f3\u5b50\u72b6\u6001\u7248\u672c\u4e0d\u517c\u5bb9","Incompatible Monkex state version."],["Monkex \u83dc\u5355\u72b6\u6001\u635f\u574f","Monkex menu state is damaged"],["\u5de5\u4f5c\u5206\u8eab\u58f3\u5b50\u72b6\u6001\u7ed3\u6784\u635f\u574f","Invalid Monkex state structure."],["Codex \u4efb\u52a1\u6570\u636e\u65e0\u6548","Invalid Codex task data."],["Monkex \u83dc\u5355\u4e0d\u53ef\u7528","Monkex menu is unavailable"],["Codex \u8bf7\u6c42\u8d85\u65f6\uff1a","Codex request timed out: "],["\u8bf7\u6c42 JSON \u65e0\u6548","Invalid JSON request."],["\u5de5\u4f5c\u5206\u8eab\u58f3\u5b50\u72b6\u6001\u635f\u574f","Monkex state is damaged."],["\u8bf7\u6c42\u6765\u6e90\u6821\u9a8c\u5931\u8d25","Request origin verification failed."],["\u4efb\u52a1 ID \u65e0\u6548","Invalid task ID."],["\u8bf7\u6c42\u957f\u5ea6\u65e0\u6548","Invalid request length."],["\u8bf7\u6c42\u5185\u5bb9\u8fc7\u5927","Request too large."],["\u8d44\u6e90\u8def\u5f84\u65e0\u6548","Invalid resource path."],["\u8fd4\u56de\u7ed3\u679c\u65e0\u6548","Invalid response"],["\u7a97\u53e3\u6a21\u5f0f\u65e0\u6548","Invalid window mode"],["\u62d6\u52a8\u4f4d\u79fb\u65e0\u6548","Invalid drag displacement"],["\u63a5\u53e3\u4e0d\u5b58\u5728","Endpoint not found."],["\u8d44\u6e90\u4e0d\u5b58\u5728","Resource not found."],["\u5b9a\u4f4d\u539f\u4efb\u52a1","Locate original task"],["\u5931\u8d25\uff1a"," failed: "]].reduce((message,[from,to])=>message.split(from).join(to),String(value||''));
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const state = {
@@ -86,7 +87,7 @@ function node(tag, className, text) {
   return e;
 }
 function shortStatus(card) {
-  return {running:"进行中",unread:"未读",read:"已读"}[displayStatus(card)];
+  return {running:"Running",unread:"Unread",read:"Read"}[displayStatus(card)];
 }
 function displayStatus(card) {
   return state.connected&&card.status==="running"?"running":card.unread?"unread":"read";
@@ -124,7 +125,7 @@ function renderTokenFan(container,tokens,running) {
   container.dataset.spinning=String(Boolean(running&&period));
   container.style.setProperty("--fan-period",(period||4)+"s");
   container.setAttribute("role","img");
-  const label="黄色风扇 · "+rateText(tokens)+(running&&period?" · 用量越高转得越快":" · 静止");
+  const label="Token activity · "+rateText(tokens)+(running&&period?" · Spins faster with higher usage":" · Idle");
   container.setAttribute("aria-label",label);container.title=label;
 }
 function updateTaskRow(button,card) {
@@ -133,15 +134,15 @@ function updateTaskRow(button,card) {
   button.setAttribute("aria-pressed",String(card.id===state.selectedThreadId));
   button.setAttribute("aria-busy",String(card.id===state.openingId));
   button.disabled=card.id===state.openingId;
-  button.title=card.name+" · "+shortStatus(card)+"\n"+(card.project_label||"")+" · "+relativeTime(activityTime(card))+"\n点击在 Codex 中打开";
+  button.title=card.name+" · "+shortStatus(card)+"\n"+(card.project_label||"")+" · "+relativeTime(activityTime(card))+"\nClick to open in Codex";
   const icon=node("i","task-state");icon.setAttribute("aria-hidden","true");
   const copy=node("div","task-copy"),title=node("div","task-title-line");
   title.append(node("strong","",card.name));
   title.append(node("span","row-status",shortStatus(card)));
-  const meta=node("div","task-meta"),progress=node("span","stage",card.summary||card.project_label||"任务");
-  progress.title=card.summary?"最近进展 · "+card.summary:"";meta.append(progress);
+  const meta=node("div","task-meta"),progress=node("span","stage",card.summary||card.project_label||"Task");
+  progress.title=card.summary?"Latest progress · "+card.summary:"";meta.append(progress);
   if(status==="running"){
-    const speed=node("span","row-rate");speed.title="当前任务 · 近 60 秒 Token 消耗速度，含输入与输出";
+    const speed=node("span","row-rate");speed.title="This task · Token usage over the last 60 seconds, including input and output";
     const fan=node("span","token-fan mini-fan");renderTokenFan(fan,card.tokens,true);
     speed.append(fan,node("span","",rateText(card.tokens)));meta.append(speed);
   }else meta.append(node("time","",relativeTime(activityTime(card))));
@@ -151,24 +152,25 @@ async function api(path, body) {
   const response = await fetch(path, {
     cache: "no-store",
     ...(body === undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json","X-Work-Twin":"1"}, body:JSON.stringify(body)})
-  }).catch(()=>{throw Error("暂时连接不上，请稍后重试");});
+  }).catch(()=>{throw Error("Cannot connect right now. Please try again.");});
   const result = await response.json();
-  if (!response.ok) throw Error(result.error || "请求失败");
+  if (!response.ok) throw Error(result.error || "Request failed");
   return result;
 }
 function banner(message) {
+  message=englishSystemMessage(message);
   $("systemBanner").textContent = message || "";
   $("systemBanner").hidden = !message;
   syncBoardSize();
 }
 function relativeTime(value) {
   const t = typeof value === "number" ? value * 1000 : Date.parse(value);
-  if (!Number.isFinite(t)) return "待同步";
+  if (!Number.isFinite(t)) return "Pending sync";
   const seconds = Math.max(0, Math.floor((Date.now()-t)/1000));
-  if (seconds<60) return "刚刚";
-  if(seconds<3600) return Math.floor(seconds/60)+" 分钟前";
-  if(seconds<86400) return Math.floor(seconds/3600)+" 小时前";
-  return Math.floor(seconds/86400)+" 天前";
+  if (seconds<60) return "Just now";
+  if(seconds<3600) return Math.floor(seconds/60)+" min ago";
+  if(seconds<86400) return Math.floor(seconds/3600)+" hr ago";
+  return Math.floor(seconds/86400)+" d ago";
 }
 function mode(value) {
   state.mode = value;
@@ -180,21 +182,21 @@ function mode(value) {
   $("petShell").hidden = !state.petMode || value !== "collapsed";
   $("appShell").hidden = state.petMode && value === "collapsed";
   if(value==="compact")syncBoardSize(true);
-  else if(state.petMode)invokeDesktop("set_pet_view",{view:value}).catch(e=>banner("窗口调整失败："+e));
+  else if(state.petMode)invokeDesktop("set_pet_view",{view:value}).catch(e=>banner("Could not resize window: "+e));
 }
 function updateCounts() {
   state.readPlay?.syncPocket();
   if(!state.connected)state.readPlay?.suspend();
   $("connectionDot").dataset.connected=String(state.connected);
-  const connectionLabel=state.connected?"已连接 Codex；点击任务打开原对话":"连接中断，保留上次记录";
+  const connectionLabel=state.connected?"Connected to Codex; click a task to open its conversation":"Disconnected; showing last known tasks";
   $("connectionDot").title=connectionLabel;$("connectionDot").setAttribute("aria-label",connectionLabel);
   const quota=weeklyQuotaState(state.weeklyUsage);
   $("weeklyRemaining").textContent=quota.label;
   $("weeklyQuota").dataset.state=quota.state;
   const reset=state.weeklyUsage?.resets_at;
-  $("weeklyQuota").title=quota.state==="unknown"?"Codex 周订阅额度待同步":"Codex 账户本周剩余 "+quota.label+(reset?" · 重置于 "+new Date(reset*1000).toLocaleString("zh-CN"):"");
+  $("weeklyQuota").title=quota.state==="unknown"?"Waiting for Codex weekly quota":"Codex weekly quota remaining: "+quota.label+(reset?" · Resets at "+new Date(reset*1000).toLocaleString("en-US"):"");
   if(quota.state!=="unknown"&&(!state.connected||state.weeklyUsage.refresh_pending)){
-    $("weeklyQuota").title+=" · 上次同步 "+new Date(state.weeklyUsage.observed_at*1000).toLocaleTimeString("zh-CN")+" · 正在重试同步";
+    $("weeklyQuota").title+=" · Last synced "+new Date(state.weeklyUsage.observed_at*1000).toLocaleTimeString("en-US")+" · Retrying sync";
   }
   $("petQuotaRemaining").textContent=quota.label;
   $("petQuota").dataset.state=quota.state;
@@ -210,9 +212,9 @@ function updateCounts() {
   const label=activity.label;
   $("petLauncher").dataset.state=activity.state;
   $("petCharacter").dataset.running=String(activity.running);
-  const quotaLabel=quota.state==="unknown"?"周额度待同步":"周剩余 "+quota.label;
-  $("petLauncher").title=label+" · "+quotaLabel+" · 按住拖动 · 轻点展开 · 右键退出";
-  $("petLauncher").setAttribute("aria-label",label+"，"+quotaLabel+"，展开任务动态");
+  const quotaLabel=quota.state==="unknown"?"Weekly quota pending":"Weekly "+quota.label;
+  $("petLauncher").title=label+" · "+quotaLabel+" · Hold to drag · Click to expand · Right-click to quit";
+  $("petLauncher").setAttribute("aria-label",label+", "+quotaLabel+", open task board");
   window.WorkTwinBananaTree?.render($("petHarvest"),unread,state.connected);
   window.WorkTwinBananaTree.renderGrowth($("petGrowth"),running,state.connected);
 }
@@ -233,7 +235,7 @@ function renderQuotaFlow(element,cards,quota) {
     return sum+(card.status==='running'&&fresh&&tokens?.ready&&Number.isFinite(tokens.tokens_per_min)&&tokens.tokens_per_min>0?tokens.tokens_per_min:0);
   },0):0;
   element.dataset.flowing=String(rate>0&&quota.state!=='unknown');
-  const description=rate>0?' · 运行任务近60秒 Token 速率合计 '+Math.round(rate).toLocaleString()+' /min · 香蕉币缓转表示活跃，不代表逐枚扣费':' · 当前无已观测的 Token 消耗';
+  const description=rate>0?' · Total token rate over the last 60 seconds: '+Math.round(rate).toLocaleString()+' /min · Slow coin rotation indicates activity, not per-coin billing':' · No recent token usage observed';
   element.title+=description;
 }
 function activityTime(card) {
@@ -259,7 +261,7 @@ function renderList(force=false) {
   const list=$("taskList");
   const existing=new Map([...list.querySelectorAll("[data-thread-id]")].map(row=>[row.dataset.threadId,row]));
   const wantedCards=filtered();
-  $("syncLabel").textContent=wantedCards.length+" 项 · "+(state.observedAt?relativeTime(state.observedAt):"同步中");
+  $("syncLabel").textContent=wantedCards.length+" tasks · "+(state.observedAt?relativeTime(state.observedAt):"Syncing");
   if(!force && state.listBusy) {
     const wanted=new Set(wantedCards.map(t=>t.id));
     // Refresh text, status and measured speed in place; keep the hovered order.
@@ -272,7 +274,7 @@ function renderList(force=false) {
     if(!existing.has(t.id))b.addEventListener("click",()=>selectThread(t.id));
     updateTaskRow(b,t);return b;
   });
-  if(!rows.length)rows.push(node("p","empty-note",state.filter==="board"?(state.connected?"当前待办已看完\n最近结果可在「近24小时」找回":"运行状态待同步"):state.filter==="history"?"24 小时至 7 天内暂无历史任务":"近 24 小时暂无任务"));
+  if(!rows.length)rows.push(node("p","empty-note",state.filter==="board"?(state.connected?"All caught up\nRecent results are in 24 hours":"Waiting for running status"):state.filter==="history"?"No tasks from 24 hours to 7 days ago":"No tasks in the last 24 hours"));
   const scroll=$("taskList").scrollTop;
   $("taskList").replaceChildren(...rows);$("taskList").scrollTop=scroll;
   syncBoardSize();
@@ -291,14 +293,14 @@ async function refresh(force=false) {
     state.readPlay?.setWeeklyHarvest(data.weekly_harvest);
     state.threads=data.threads||[];
     state.connected=data.health?.app_server==="online" && !data.error && !data.stale && !data.loading;
-    $("connectionText").textContent=data.loading?"正在整理任务":state.connected?(data.coverage?.external_runtime==="local_events"?"Codex 已连接 · 正在同步运行状态":"Codex 已连接 · 部分状态待确认"):"同步中断 · 保留上次状态";
+    $("connectionText").textContent=data.loading?"Preparing tasks":state.connected?(data.coverage?.external_runtime==="local_events"?"Codex connected · Syncing live status":"Codex connected · Some statuses pending"):"Sync interrupted · Keeping last known state";
     state.observedAt=data.observed_at;
     state.weeklyUsage=data.health?.usage?.weekly||null;
     if(data.error)banner(data.error);
     if(!data.loading) renderList(force);
     updateCounts();
   }catch(e){
-    state.connected=false;$("connectionText").textContent="连接中断";banner(e.message);renderList(true);updateCounts();
+    state.connected=false;$("connectionText").textContent="Disconnected";banner(e.message);renderList(true);updateCounts();
   }finally{state.refreshing=false;}
   })();
   return state.refreshPromise;
@@ -318,7 +320,7 @@ function cancelAutoCollapse() {
   clearTimeout(state.autoCollapseTimer);state.autoCollapseTimer=null;
 }
 function syncPin() {
-  const label=state.pinned?"拔起图钉 · 切换窗口时自动收起":"钉住看板 · 切换窗口时保持展开";
+  const label=state.pinned?"Unpin · Collapse when switching windows":"Pin · Stay open when switching windows";
   $("pinButton").setAttribute("aria-pressed",String(state.pinned));
   $("pinButton").setAttribute("aria-label",label);$("pinButton").title=label;
 }
@@ -364,10 +366,10 @@ async function refreshFromCoin(event) {
   state.coinRefreshing=true;
   const button=$("quotaCoinButton");
   button.setAttribute("aria-busy","true");
-  button.title="正在刷新任务与额度…";
+  button.title="Refreshing tasks and quota…";
   try{
     await refresh(true);
-    button.title=weeklyQuotaState(state.weeklyUsage).state==="unknown"?"额度暂未同步，点击重试":state.weeklyUsage?.refresh_pending?"显示上次同步额度 · 正在自动重试":"已刷新 · 点击刷新任务与额度";
+    button.title=weeklyQuotaState(state.weeklyUsage).state==="unknown"?"Quota pending; click to retry":state.weeklyUsage?.refresh_pending?"Showing last synced quota · Retrying automatically":"Updated · Click to refresh tasks and quota";
   }finally{
     state.coinRefreshing=false;button.setAttribute("aria-busy","false");
   }
@@ -390,7 +392,7 @@ function bindPetDrag() {
     press.x=e.screenX;press.y=e.screenY;
     // Screen coordinates stay stable as the captured pointer moves the window.
     moves=moves.then(()=>invokeDesktop("move_pet_window",{dx,dy}))
-      .catch(error=>{tree.title="拖动失败，可重试："+error;});
+      .catch(error=>{tree.title="Drag failed; try again: "+error;});
   };
   tree.onpointerup=release;
   tree.onpointercancel=release;

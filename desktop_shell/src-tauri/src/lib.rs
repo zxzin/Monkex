@@ -101,12 +101,13 @@ fn move_pet_window(window: WebviewWindow, dx: f64, dy: f64) -> Result<(), String
 }
 
 #[tauri::command]
-fn show_pet_menu(window: tauri::Window, x: f64, y: f64) -> Result<(), String> {
+fn show_pet_menu(window: tauri::Window, x: f64, y: f64, lang: Option<String>) -> Result<(), String> {
     let app = window.app_handle();
-    let toggle = MenuItemBuilder::with_id("pet-toggle", "展开 / 收起")
+    let english = lang.as_deref().is_some_and(|value| value.starts_with("en"));
+    let toggle = MenuItemBuilder::with_id("pet-toggle", if english { "Expand / Collapse" } else { "展开 / 收起" })
         .build(app)
         .map_err(|error| error.to_string())?;
-    let quit = MenuItemBuilder::with_id("pet-quit", "退出 Monkex")
+    let quit = MenuItemBuilder::with_id("pet-quit", if english { "Quit Monkex" } else { "退出 Monkex" })
         .build(app)
         .map_err(|error| error.to_string())?;
     let menu = MenuBuilder::new(app)

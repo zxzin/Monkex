@@ -1,5 +1,7 @@
 # Monkex · Codex 桌面任务看板
 
+[English](README.en.md) · [英文交互手册](docs/guide.en.html)
+
 **把 Codex 的进展，种在桌面上。**
 
 Monkex 面向 **OpenAI Codex 桌面用户**：用像素香蕉树展示运行任务和未读结果，点击看板任务即可回到 Codex 原对话。支持 macOS Apple Silicon 与 Windows x64。
