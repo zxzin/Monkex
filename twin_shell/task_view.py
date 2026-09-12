@@ -38,6 +38,10 @@ def message_text(item: dict[str, Any]) -> str:
     return "\n".join(str(p.get("text") or "") for p in content if isinstance(p, dict))
 
 
+def result_version(turn_id: str, text: str) -> str:
+    return hashlib.sha256((str(turn_id) + text).encode()).hexdigest()[:24]
+
+
 def category_for(text: str, cwd: str) -> tuple[str, str]:
     # Categories are navigation hints; they grant no execution or Skill authority.
     if re.search(r"Course|课程|论文|作业|DOCX|Word|学术", text + cwd, re.I):
@@ -92,7 +96,10 @@ def describe(thread: dict[str, Any], turns: list[dict[str, Any]], *, owned: bool
         "activity_excerpt": clean_text(final or (message_text(agents[-1]) if agents else summary), 100),
         "progress_excerpt": clean_text(final or (message_text(agents[-1]) if agents else summary), 360),
         "result_is_latest": bool(result_final and result_turn.get("id") == latest.get("id")),
-        "result_excerpt": result, "result_version": hashlib.sha256((str(result_turn.get("id")) + result_final).encode()).hexdigest()[:24] if result_final else None,
+        "result_excerpt": result, "result_version": result_version(result_turn.get("id"), result_final) if result_final else None,
+        "result_turn_id": result_turn.get("id"),
+        "result_completed_at": result_turn.get("completedAt") or result_turn.get("startedAt") or 0,
+        "latest_turn_started_at": latest.get("startedAt") or 0,
         "context_version": version, "latest_turn_id": latest.get("id"),
         "has_result": bool(result_final),
         "observation": "实时连接" if owned else "历史快照 · 运行状态未确认",

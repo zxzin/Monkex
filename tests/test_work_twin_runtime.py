@@ -58,7 +58,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_stale_rollout_without_fresh_database_timestamp_stays_skipped(self):
         self.append("item_completed", turn_id="turn-1", item={"type": "Reasoning"})
-        stale = self.now - 3600
+        stale = self.now - 8 * 86400
         os.utime(self.log, (stale, stale))
         self.observer = LocalRuntimeObserver(self.root, clock=lambda: self.now)
         self.assertEqual(self.observed()["status"], "unknown")
@@ -223,6 +223,34 @@ class RuntimeTests(unittest.TestCase):
         apply_runtime(card, self.observed())
         self.assertEqual(card["status"], "interrupted")
         self.assertNotIn("runtime_source", card)
+
+    def test_new_local_result_replaces_stale_api_turn_and_matches_api_version(self):
+        old = {"id": "old", "status": "interrupted", "startedAt": self.now - 100}
+        card = describe({}, [old], owned=False)
+        self.append("task_started", turn_id="new")
+        self.append("task_complete", turn_id="new", last_agent_message="New result")
+        apply_runtime(card, self.observed())
+        fresh = describe({}, [{"id": "new", "status": "completed", "items": [
+            {"type": "agentMessage", "phase": "final_answer", "text": "New result"}]}], owned=False)
+        self.assertEqual(card["status"], "result_ready")
+        self.assertEqual(card["latest_turn_id"], "new")
+        self.assertTrue(card["has_result"] and card["result_is_latest"])
+        self.assertEqual(card["result_version"], fresh["result_version"])
+        self.assertNotIn("New result", repr(self.observer._cursors))
+
+    def test_completed_result_survives_cold_start_after_runtime_lease(self):
+        self.append("task_complete", turn_id="new", last_agent_message="Result")
+        self.now += 3600
+        self.assertIsNotNone(self.observed().get("result_version"))
+
+    def test_old_completion_cannot_replace_newer_api_result(self):
+        self.append("task_complete", turn_id="old", last_agent_message="Old result")
+        card = describe({}, [{"id": "new", "status": "completed", "startedAt": self.now + 10,
+            "completedAt": self.now + 20, "items": [{"type": "agentMessage", "text": "New result"}]}], owned=False)
+        version = card["result_version"]
+        apply_runtime(card, self.observed())
+        self.assertEqual(card["result_version"], version)
+        self.assertEqual(card["latest_turn_id"], "new")
 
 
 if __name__ == "__main__":

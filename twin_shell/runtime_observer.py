@@ -19,11 +19,13 @@ import time
 from typing import Any
 
 from .token_meter import TokenMeter
+from .task_view import result_version
 
 
 READ_LIMIT = 4 * 1024 * 1024
 LINE_LIMIT = 2 * 1024 * 1024
 RUNTIME_LEASE = 30 * 60
+RESULT_WINDOW = 7 * 86400
 PROGRESS_EVENTS = {"agent_reasoning", "agent_message", "mcp_tool_call_begin", "mcp_tool_call_end", "exec_command_begin", "exec_command_end", "item_started", "item_completed"}
 PROGRESS_ITEMS = {"reasoning", "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output"}
 
@@ -40,6 +42,9 @@ class Cursor:
     activity_at: float = 0
     anchored: bool = False
     terminal_ids: set[str] = field(default_factory=set)
+    result_turn_id: str | None = None
+    result_version: str | None = None
+    result_completed_at: float = 0
     tokens: TokenMeter = field(default_factory=TokenMeter)
 
     def snapshot(self, now: float) -> dict[str, Any]:
@@ -47,6 +52,8 @@ class Cursor:
         if status == "running" and not (-30 <= now - self.activity_at <= RUNTIME_LEASE):
             status = "unknown"
         return {"status": status, "turn_id": self.turn_id, "event_at": self.event_at,
+                "result_turn_id": self.result_turn_id, "result_version": self.result_version,
+                "result_completed_at": self.result_completed_at,
                 "anchored": self.anchored, "revision": f"{self.offset}:{status}:{self.turn_id}:{self.event_at}"}
 
 
@@ -104,7 +111,7 @@ class LocalRuntimeObserver:
                     # Windows can retain an open rollout's original mtime while
                     # Codex keeps appending. The state database is the canonical
                     # freshness signal for selecting which bounded tails to read.
-                    if not cursor and self.clock() - freshness > RUNTIME_LEASE:
+                    if not cursor and self.clock() - freshness > RESULT_WINDOW:
                         continue
                     if not cursor or cursor.identity != identity or stat.st_size < cursor.offset:
                         cursor = Cursor(identity)
@@ -185,6 +192,13 @@ class LocalRuntimeObserver:
             cursor.status = "interrupted" if kind == "turn_aborted" else "failed" if payload.get("error") else "completed"
             cursor.turn_id = turn_id or cursor.turn_id
             cursor.event_at = at
+            # The desktop completion envelope remains authoritative when the
+            # paginated history API lags. Retain only its identity and digest.
+            final = payload.get("last_agent_message")
+            if cursor.status == "completed" and turn_id and isinstance(final, str) and final.strip():
+                cursor.result_turn_id = turn_id
+                cursor.result_version = result_version(turn_id, final)
+                cursor.result_completed_at = at
             return
         # Context associates later legacy activity with a turn without itself
         # proving activity. Quoted events inside message bodies are never read.
@@ -240,6 +254,15 @@ def apply_runtime(card: dict[str, Any], evidence: dict[str, Any]) -> None:
     status = evidence.get("status")
     turn_id = evidence.get("turn_id")
     matches = not turn_id or not card.get("latest_turn_id") or card["latest_turn_id"] == turn_id
+    latest_started = card.get("latest_turn_started_at") or 0
+    newer = bool(latest_started and (evidence.get("event_at") or 0) >= latest_started)
+    result_at = evidence.get("result_completed_at") or 0
+    if evidence.get("result_version") and result_at > (card.get("result_completed_at") or 0):
+        # A timestamp comparison protects a newer API result from an older tail.
+        card.update(has_result=True, result_version=evidence["result_version"],
+                    result_turn_id=evidence["result_turn_id"], result_completed_at=result_at)
+        if evidence["result_turn_id"] != card.get("latest_turn_id"):
+            card.update(result_excerpt="新一轮已完成 · 打开 Codex 查看结果", result_is_latest=False)
     if status == "running":
         # A completed API turn wins over activity with no start or turn anchor.
         if not turn_id and card.get("status") in {"result_ready", "waiting_user"}:
@@ -247,7 +270,10 @@ def apply_runtime(card: dict[str, Any], evidence: dict[str, Any]) -> None:
         card.update(status="running", stage="正在推进", result_is_latest=False,
                     observation="本机运行事件 · 只读跟踪", runtime_source="local_events",
                     runtime_observed_at=evidence.get("event_at"))
-    elif status in {"completed", "interrupted", "failed"} and matches:
+    elif status in {"completed", "interrupted", "failed"} and (matches or newer):
+        if turn_id:
+            card["latest_turn_id"] = turn_id
+        card["result_is_latest"] = bool(card.get("has_result") and card.get("result_turn_id") == card.get("latest_turn_id"))
         card.update(runtime_source="local_events", runtime_observed_at=evidence.get("event_at"), observation="本机回合结束事件 · 只读跟踪")
         if status == "completed":
             if card.get("result_is_latest"):

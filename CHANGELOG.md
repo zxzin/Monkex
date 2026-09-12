@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — 2026-09-12
+
+- Fixed completed Codex tasks disappearing from the board when the paginated history API still returns an older, already-read turn. Confirmed local completion events now supply a result identity consistent with the history API.
+- Preserve newer result cursors across stale refreshes and restarts; read receipts remain bound to the specific result. Existing read receipts and weekly banana totals are retained.
+- Recover recent completion metadata within the existing seven-day history window, using bounded local reads and retaining only identifiers, timestamps and result digests.
+- Added regression coverage for stale history, new completion after an acknowledged result, restart recovery and protection of newer API results.
+
+修复任务完成后因历史接口滞后而从看板消失的问题。新结果独立标记未读，刷新和重启保留结果，原有已读记录与收蕉数保持。此修复已同步源码；公开 v0.1.2 安装包仍保持原版，后续安装包发布以 Releases 为准。
+
 ## 0.1.2 Preview
 
 - Windows standalone launch now discovers Codex Desktop's versioned per-user CLI directory and the Microsoft Store package resource without relying on Codex's process-only `PATH` injection.

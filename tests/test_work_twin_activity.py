@@ -133,6 +133,29 @@ class ActivityTests(unittest.TestCase):
         self.shell._connected_threads.add("thread-0")
         return self.shell.read_thread("thread-0")["card"]
 
+    def test_local_completion_is_unread_after_old_ack_and_survives_stale_history(self):
+        from twin_shell.runtime_observer import apply_runtime
+        from twin_shell.task_view import result_version
+        self.client.turns[0].update(startedAt=100, completedAt=110)
+        old = self.shell.read_thread("thread-0")["card"]
+        self.shell.acknowledge_result("thread-0", old["result_version"])
+        card = deepcopy(old)
+        evidence = {"status": "completed", "turn_id": "turn-b", "event_at": 200,
+            "result_turn_id": "turn-b", "result_version": result_version("turn-b", "New result"),
+            "result_completed_at": 200}
+        apply_runtime(card, evidence)
+        self.shell.feed.observe(card)
+        self.assertTrue(card["unread"])
+        self.assertEqual(card["status"], "result_ready")
+        self.assertEqual(self.shell.weekly_harvest()["count"], 1)
+        # A history-only refresh/restart cannot restore the previous result.
+        restored = WorkTwinShell(state_path=self.root / "state.json", client=self.client)
+        stale = restored.read_thread("thread-0")["card"]
+        self.assertTrue(stale["unread"])
+        self.assertEqual(stale["result_version"], evidence["result_version"])
+        restored.acknowledge_result("thread-0", evidence["result_version"])
+        self.assertFalse(restored.read_thread("thread-0")["card"]["unread"])
+
     def test_weekly_harvest_persists_and_deduplicates_successful_receipts(self):
         card = self.shell.read_thread("thread-0")["card"]
         version = card["result_version"]

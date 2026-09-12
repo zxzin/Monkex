@@ -65,8 +65,18 @@ class ActivityFeed:
             old = ledger.get(card["id"], {})
             entry = dict(old)
             entry["latest_turn_id"] = card.get("latest_turn_id")
-            if card.get("has_result"):
+            result_at = card.get("result_completed_at") or 0
+            if card.get("has_result") and result_at >= (entry.get("result_completed_at") or 0):
                 entry["result_version"] = card["result_version"]
+                entry["result_completed_at"] = result_at
+                entry["result_turn_id"] = card.get("result_turn_id")
+            elif card.get("has_result") and entry.get("result_version"):
+                # History can lag behind a confirmed local completion, including
+                # after restart. Preserve the durable cursor until history catches up.
+                card.update(has_result=True, result_version=entry["result_version"],
+                            result_completed_at=entry.get("result_completed_at", 0),
+                            result_turn_id=entry.get("result_turn_id"), result_is_latest=False,
+                            result_excerpt="新一轮已完成 · 打开 Codex 查看结果")
             if entry != old:
                 ledger[card["id"]] = entry
                 shell._save_state()
