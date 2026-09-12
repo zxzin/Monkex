@@ -2,6 +2,7 @@
 
 ## Unreleased — 2026-09-12
 
+- Follow Codex Desktop's current blue-dot read-state schema for a single saved account/local execution scope. Reading in Codex clears Monkex's unread result; a blue dot restores unread status. Automatic synchronization preserves weekly harvest totals. Ambiguous multi-account/local scopes retain the fallback behavior.
 - Fixed completed Codex tasks disappearing from the board when the paginated history API still returns an older, already-read turn. Confirmed local completion events now supply a result identity consistent with the history API.
 - Preserve newer result cursors across stale refreshes and restarts; read receipts remain bound to the specific result. Existing read receipts and weekly banana totals are retained.
 - Recover recent completion metadata within the existing seven-day history window, using bounded local reads and retaining only identifiers, timestamps and result digests.

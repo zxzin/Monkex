@@ -118,6 +118,41 @@ class CodexReadReceiptTests(unittest.TestCase):
             self.assertFalse(CodexReadReceipts(Path(other)).reconcile(self.ledger, self.cards))
             self.assertTrue(self.cards[0]["unread"])
 
+    def modern_snapshot(self, ids):
+        self.adapter.path.write_text(json.dumps({"electron-thread-read-state-v1": {
+            "version": 1, "unreadByIdentity": {"identity": {"local:" + "a" * 64: ids}}}}), encoding="utf-8")
+
+    def test_current_codex_blue_dot_is_authoritative_on_first_sync(self):
+        self.modern_snapshot([])
+        self.adapter.reconcile(self.ledger, self.cards)
+        self.assertFalse(self.cards[0]["unread"])
+        self.assertEqual(self.ledger["thread-0"]["ack_version"], "result-a")
+        self.modern_snapshot(["thread-0"])
+        self.adapter.reconcile(self.ledger, self.cards)
+        self.assertTrue(self.cards[0]["unread"])
+        self.modern_snapshot([])
+        self.adapter.reconcile(self.ledger, self.cards)
+        self.assertFalse(self.cards[0]["unread"])
+
+    def test_current_codex_new_blue_dot_restores_unread_after_delayed_write(self):
+        self.modern_snapshot([])
+        self.ledger["thread-0"]["result_version"] = "result-b"
+        self.adapter.reconcile(self.ledger, self.cards)
+        self.assertFalse(self.cards[0]["unread"])
+        self.modern_snapshot(["thread-0"])
+        self.adapter.reconcile(self.ledger, self.cards)
+        self.assertTrue(self.cards[0]["unread"])
+        self.assertEqual(self.cards[0]["pending_result_version"], "result-b")
+
+    def test_current_codex_ambiguous_scope_preserves_receipts(self):
+        for identities in [{}, {"a": {"local:" + "a" * 64: []}, "b": {}},
+                           {"a": {"remote:host": []}},
+                           {"a": {"local:" + "a" * 64: [], "local:" + "b" * 64: []}}]:
+            self.adapter.path.write_text(json.dumps({"electron-thread-read-state-v1": {
+                "version": 1, "unreadByIdentity": identities}}))
+            self.assertFalse(self.adapter.reconcile(self.ledger, self.cards))
+            self.assertTrue(self.cards[0]["unread"])
+
 
 class ActivityTests(unittest.TestCase):
     def setUp(self):
