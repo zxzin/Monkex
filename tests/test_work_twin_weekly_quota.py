@@ -57,11 +57,29 @@ class WeeklyQuotaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             shell = WorkTwinShell(state_path=Path(temporary) / "state.json", client=client)
             shell._feed_thread = object()
-            shell._feed_snapshot = {"threads": [{"id": "example", "unread": True}]}
+            shell._usage_snapshot = {"weekly": {"remaining_percent": 11}}
+            shell._feed_snapshot = {"threads": [{"id": "old-account"}]}
+            shell._pending_requests["old-request"] = {"request_id": "old-request"}
+            shell._active_turns["old-account"] = "turn-old"
+            shell._connected_threads.add("old-account")
+            shell.feed.cache["old-account"] = (1, {"card": {"id": "old-account"}})
+            shell.feed.metadata["old-account"] = {"updatedAt": 1}
+            shell.feed.project_tokens["/old"] = {"tokens": 1}
+            shell.feed.collect = Mock(return_value={"threads": [{"id": "current-account", "unread": True}]})
             result = shell.refresh_dashboard()
             self.assertEqual(result["health"]["usage"]["weekly"]["remaining_percent"], 92)
             self.assertTrue(result["threads"][0]["unread"])
+            self.assertEqual(result["threads"][0]["id"], "current-account")
+            client.close.assert_called_once_with()
+            client.start.assert_called_once_with()
             client.request.assert_called_once_with("account/rateLimits/read", None)
+            shell.feed.collect.assert_called_once_with()
+            self.assertEqual(shell._pending_requests, {})
+            self.assertEqual(shell._active_turns, {})
+            self.assertEqual(shell._connected_threads, set())
+            self.assertEqual(shell.feed.cache, {})
+            self.assertEqual(shell.feed.metadata, {})
+            self.assertEqual(shell.feed.project_tokens, {})
             self.assertFalse(shell.state_path.exists())
 
     def test_remaining_is_one_hundred_minus_used(self):

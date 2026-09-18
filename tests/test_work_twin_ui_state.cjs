@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const source=fs.readFileSync(require('node:path').join(__dirname,'../shell/app.js'),'utf8');
+const source=fs.readFileSync(process.env.MONKEX_APP_JS||require('node:path').join(__dirname,'../shell/app.js'),'utf8');
 class Element {
   constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.scrollTop=12;this.style={setProperty(){}};}
   append(...children){this.children.push(...children);}
@@ -86,4 +86,27 @@ assert.ok(!html.includes('suggestionSection')&&!source.includes('suggestion'),'r
 assert.ok(!html.includes('id="messageInput"')&&!html.includes('id="detailView"'),'reading and replies live in Codex');
 assert.ok(summaryRow.title.includes('点击在 Codex 中打开'),'rows announce their direct navigation');
 assert.ok(!html.includes('编辑上面的建议'),'composer copy refers only to user input');
-console.log('PASS: hover ordering, completion removal, live badges, existing progress text, rates, centered yellow fan and direct navigation affordance');
+// Exercise sorting and rendering together: hover/focus must not freeze a
+// completed unread result behind running rows when the membership is unchanged.
+vm.runInContext(source.slice(source.indexOf('function boardSets('),source.indexOf('function renderList(')),ctx);
+state.filter='board';state.listBusy=false;state.connected=true;
+const now=Date.now()/1000;
+state.threads=['a','b','c'].map((id,i)=>({id,name:id,status:'running',unread:false,updated_at:now-i}));
+ctx.renderList(true);
+state.listBusy=true;
+Object.assign(state.threads[2],{status:'result_ready',unread:true,updated_at:now+1});
+ctx.renderList();
+assert.deepEqual(list.children.map(row=>row.dataset.threadId),['c','a','b'],
+  'new unread completion rises immediately even while hovered or focused');
+assert.equal(state.queuedRender,false,'priority transitions are applied immediately');
+state.filter='recent';ctx.renderList(true);
+Object.assign(state.threads[1],{status:'result_ready',unread:true,updated_at:now+2});
+ctx.renderList();
+assert.deepEqual(list.children.map(row=>row.dataset.threadId),['b','c','a']);
+state.threads[1].unread=false;ctx.renderList();
+assert.deepEqual(list.children.map(row=>row.dataset.threadId),['c','b','a'],
+  'read transition moves behind unread results while focused');
+state.threads[2].status='running';ctx.renderList();
+assert.deepEqual(list.children.map(row=>row.dataset.threadId),['b','c','a'],
+  'resuming returns the row to the running group');
+console.log('PASS: hover stability, live priority transitions, completion removal, badges, progress and navigation');

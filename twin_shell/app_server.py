@@ -189,7 +189,7 @@ class AppServerClient:
         process = self._process
         if process is None or process.stdout is None:
             return
-        while not self._closed.is_set():
+        while process is self._process and not self._closed.is_set():
             line = process.stdout.readline()
             if not line:
                 break
@@ -207,7 +207,7 @@ class AppServerClient:
                     waiter.values.put(message)
                     continue
             self._emit(message)
-        if not self._closed.is_set():
+        if process is self._process and not self._closed.is_set():
             self._emit(
                 {
                     "method": "shell/appServerDisconnected",
@@ -220,7 +220,7 @@ class AppServerClient:
         if process is None or process.stderr is None:
             return
         for line in process.stderr:
-            if self._closed.is_set():
+            if process is not self._process or self._closed.is_set():
                 break
             text = line.strip()
             if text:

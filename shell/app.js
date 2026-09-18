@@ -262,9 +262,11 @@ function renderList(force=false) {
   $("syncLabel").textContent=wantedCards.length+" 项 · "+(state.observedAt?relativeTime(state.observedAt):"同步中");
   if(!force && state.listBusy) {
     const wanted=new Set(wantedCards.map(t=>t.id));
-    // Refresh text, status and measured speed in place; keep the hovered order.
+    const priorityChanged=wantedCards.some(card=>existing.get(card.id)?.dataset.status!==displayStatus(card));
+    // Keep routine activity refreshes stable under hover/focus. State changes
+    // apply the unread/read/running priority immediately, using the old badges.
     for(const card of wantedCards){const row=existing.get(card.id);if(row)updateTaskRow(row,card);}
-    if(existing.size===wanted.size&&[...existing.keys()].every(id=>wanted.has(id))){state.queuedRender=true;syncBoardSize();return;}
+    if(!priorityChanged&&existing.size===wanted.size&&[...existing.keys()].every(id=>wanted.has(id))){state.queuedRender=true;syncBoardSize();return;}
   }
   state.queuedRender=false;
   const rows=wantedCards.map(t=>{
@@ -287,6 +289,10 @@ async function refresh(force=false) {
   state.refreshing=true;
   state.refreshPromise=(async()=>{
   try{
+    if(force){
+      state.threads=[];state.weeklyUsage=null;state.observedAt=null;state.connected=false;
+      $("connectionText").textContent="正在重新连接 Codex…";banner("");renderList(true);updateCounts();
+    }
     const data=await api(force?"/api/refresh":"/api/threads",force?{}:undefined);
     state.readPlay?.setWeeklyHarvest(data.weekly_harvest);
     state.threads=data.threads||[];
@@ -448,6 +454,8 @@ async function init() {
   window.addEventListener("pagehide",()=>state.readPlay?.dispose());
   mode(state.petMode&&!state.pinned&&params.get("expanded")!=="1"?"collapsed":"compact");
   await refresh();
+  document.documentElement.dataset.monkexBoot="ready";
+  try{sessionStorage.removeItem("monkex-boot-retry");}catch{}
   setInterval(refresh,5000);
   const events=new EventSource("/api/events");
   for(const name of ["feed_updated","task_started","user_gate_required","user_gate_resolved","codex_event"]){

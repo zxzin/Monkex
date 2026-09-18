@@ -8,7 +8,7 @@ Keep an eye on your Codex tasks from a little pixel-art banana tree.
 - Click the tree to open the board, then a task to return to its original Codex conversation.
 - Hold anywhere on the tree to drag it. An unpinned board collapses when you switch windows.
 - Collect a banana when a result is successfully opened and marked read from the board. The avatar counts your local weekly harvest.
-- See your remaining weekly quota. Click the banana coin to refresh; it turns slowly when recent token use is observed.
+- See your remaining weekly quota. Click the banana coin to rebuild the local Codex connection and fully reload tasks, read state and quota from the currently signed-in account; it turns slowly when recent token use is observed.
 - Right-click the tree to quit. The running app stays out of the macOS Dock and Windows taskbar.
 
 Monkex is independent, local-first software for an existing **Codex desktop** installation. It is not an OpenAI product. It reads the current system user local Codex environment; packages contain no maker task history. Replies, approvals and execution stay in Codex.

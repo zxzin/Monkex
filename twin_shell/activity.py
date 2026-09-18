@@ -21,6 +21,12 @@ class ActivityFeed:
         self.metadata: dict[str, dict[str, Any]] = {}
         self.project_tokens: dict[str, dict[str, Any]] = {}
 
+    def reset_session_cache(self) -> None:
+        """Discard data derived from the previous Codex app-server session."""
+        self.cache.clear()
+        self.metadata.clear()
+        self.project_tokens.clear()
+
     def telemetry(self, card: dict[str, Any]) -> None:
         if self.shell.runtime_observer:
             card["tokens"] = self.shell.runtime_observer.token_snapshot(card["id"])

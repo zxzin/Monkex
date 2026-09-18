@@ -2,6 +2,9 @@
 
 ## Unreleased — 2026-09-12
 
+- Recover automatically when the native WebView fails to finish the first frontend boot. A one-shot cache-busted reload now restores task and quota polling; a persistent second failure becomes visible instead of leaving the board on the initial loading screen forever.
+- Make the banana-coin refresh a full Codex resync: restart the local app-server session, discard account-derived task and quota caches, and rebuild the board from the currently signed-in account.
+- Apply unread/read/running priority changes immediately while a task row is hovered or focused. Newly completed unread tasks move above running tasks; routine progress updates retain stable ordering. Added combined sorting/rendering regression coverage, including checks against an installed app script.
 - Follow Codex Desktop's current blue-dot read-state schema for a single saved account/local execution scope. Reading in Codex clears Monkex's unread result; a blue dot restores unread status. Automatic synchronization preserves weekly harvest totals. Ambiguous multi-account/local scopes retain the fallback behavior.
 - Fixed completed Codex tasks disappearing from the board when the paginated history API still returns an older, already-read turn. Confirmed local completion events now supply a result identity consistent with the history API.
 - Preserve newer result cursors across stale refreshes and restarts; read receipts remain bound to the specific result. Existing read receipts and weekly banana totals are retained.

@@ -28,6 +28,10 @@ def codex_executable() -> Path:
     if explicit:
         return Path(explicit).expanduser()
     candidates = []
+    if sys.platform != "win32":
+        located = shutil.which("codex")
+        if located:
+            candidates.append(Path(located))
     if sys.platform == "darwin":
         candidates += [Path(p) / "Contents/Resources/codex" for p in (
             "/Applications/ChatGPT.app", "/Applications/Codex.app",
@@ -37,10 +41,6 @@ def codex_executable() -> Path:
         if located:
             candidates.append(Path(located))
         candidates += _windows_codex_candidates()
-    else:
-        located = shutil.which("codex")
-        if located:
-            candidates.append(Path(located))
     return next((p for p in candidates if p.is_file()), Path("__monkex_codex_not_found__"))
 
 

@@ -67,6 +67,8 @@
   "拔起图钉 · 切换窗口时自动收起": "Unpin · Collapse when switching windows",
   "钉住看板 · 切换窗口时保持展开": "Pin · Stay open when switching windows",
   "正在刷新任务与额度…": "Refreshing tasks and quota…",
+  "正在重新连接 Codex…": "Reconnecting to Codex…",
+  "界面启动失败，请重新打开 Monkex": "The interface could not start. Reopen Monkex.",
   "额度暂未同步，点击重试": "Quota pending; click to retry",
   "显示上次同步额度 · 正在自动重试": "Showing last synced quota · Retrying automatically",
   "已刷新 · 点击刷新任务与额度": "Updated · Click to refresh tasks and quota",

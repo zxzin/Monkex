@@ -109,6 +109,7 @@ class WorkTwinShell:
         self._connected_threads: set[str] = set()
         self._send_lock = threading.Lock()
         self._feed_lock = threading.Lock()
+        self._sync_lock = threading.RLock()
         self._feed_snapshot: dict[str, Any] = {"threads": [], "loading": True}
         self._feed_at = 0.0
         self._stop_event = threading.Event()
@@ -336,9 +337,10 @@ class WorkTwinShell:
 
     def list_threads(self, *, limit: int = 60) -> dict[str, Any]:
         if self._feed_thread is None:
-            with self._feed_lock:
-                self._feed_snapshot = self.feed.collect()
-                self._feed_at = time.time()
+            with self._sync_lock:
+                with self._feed_lock:
+                    self._feed_snapshot = self.feed.collect()
+                    self._feed_at = time.time()
         with self._feed_lock:
             result = deepcopy(self._feed_snapshot)
         result["health"] = self.health()
@@ -354,7 +356,8 @@ class WorkTwinShell:
     def _feed_loop(self) -> None:
         while not self._stop_event.is_set():
             try:
-                result = self.feed.collect()
+                with self._sync_lock:
+                    result = self.feed.collect()
                 with self._feed_lock:
                     self._feed_snapshot = result
                     self._feed_at = time.time()
@@ -554,7 +557,28 @@ class WorkTwinShell:
             self._usage_lock.release()
 
     def refresh_dashboard(self) -> dict[str, Any]:
-        self._refresh_usage()
+        # A manual refresh starts a new app-server session so an account switch
+        # is observed immediately. All account-derived snapshots are rebuilt
+        # before the response is exposed to the window.
+        with self._sync_lock:
+            self.client.close()
+            with self._usage_lock:
+                self._usage_snapshot = None
+            with self._pending_lock:
+                self._pending_requests.clear()
+            self._active_turns.clear()
+            self._connected_threads.clear()
+            self.feed.reset_session_cache()
+            with self._feed_lock:
+                self._feed_snapshot = {"threads": [], "loading": True}
+                self._feed_at = 0.0
+            self.client.start()
+            self._refresh_usage()
+            result = self.feed.collect()
+            with self._feed_lock:
+                self._feed_snapshot = result
+                self._feed_at = time.time()
+            self.events.publish({"type": "feed_updated", "at": _utc_now()})
         return self.list_threads()
 
     def _read_usage(self) -> dict[str, Any]:
@@ -587,7 +611,8 @@ class WorkTwinShell:
 
     def _usage_loop(self) -> None:
         while not self._stop_event.is_set():
-            usage = self._refresh_usage()
+            with self._sync_lock:
+                usage = self._refresh_usage()
             delay = min(5.0, self._usage_poll_seconds) if usage.get("refresh_pending") else self._usage_poll_seconds
             if self._stop_event.wait(delay):
                 break

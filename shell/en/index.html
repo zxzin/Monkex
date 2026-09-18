@@ -43,6 +43,30 @@
     <div id="readPlayLayer" class="read-play-layer" aria-hidden="true"></div>
     <div id="readPlayToast" class="read-play-toast" role="status" aria-live="polite" hidden></div>
   </main>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const retryKey = "monkex-boot-retry";
+      root.dataset.monkexBoot = "starting";
+      window.setTimeout(() => {
+        if (root.dataset.monkexBoot === "ready") return;
+        let retries = 0;
+        try { retries = Number(sessionStorage.getItem(retryKey) || "0"); } catch {}
+        if (retries < 1) {
+          try { sessionStorage.setItem(retryKey, "1"); } catch {}
+          const retryUrl = new URL(location.href);
+          retryUrl.searchParams.set("_boot", String(Date.now()));
+          location.replace(retryUrl.href);
+          return;
+        }
+        const banner = document.getElementById("systemBanner");
+        if (banner) {
+          banner.textContent = "The interface could not start. Reopen Monkex.";
+          banner.hidden = false;
+        }
+      }, 6000);
+    })();
+  </script>
   <script src="/shell/en/banana-tree.js" defer></script>
   <script src="/shell/en/read-play.js" defer></script>
   <script src="/shell/en/task-navigation.js" defer></script>
