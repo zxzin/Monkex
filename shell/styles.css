@@ -2,12 +2,15 @@
   --zinx-ink:#171512; --zinx-white:#ffffff; --zinx-paper:#f7faff;
   --zinx-red:#e7372f; --zinx-yellow:#ffd33d; --zinx-blue:#2477ff; --zinx-green:#16b35c;
   /* Banana fruit and leaf roles overlay the established glass/pixel system. */
-  --ink:#183b27; --muted:#5b7160; --line:#d5e4d2; --paper:#f2f8ed;
+  --ink:#183b27; --muted:#536b59; --line:#d5e4d2; --paper:#f2f8ed;
   --red:var(--zinx-red); --yellow:var(--zinx-yellow); --green:#278548;
   --green-ink:#23673b; --red-ink:#b32923; --yellow-ink:#725300;
   --green-soft:#e5f4e8; --red-soft:#ffefed; --yellow-soft:#fff6d6;
   --leaf-rim:#c6dec5; --leaf-hover:#d7eddc; --fruit-rim:#ead58a; --fruit-hover:#ffefb3;
-  --sage:#8da58d; --sage-soft:#e1ebdc; --glass:rgba(242,248,237,.92);
+  --running-surface:#def2e3; --running-hover:#d2eada; --running-rim:#b9d9c0;
+  --completed-surface:#fff3c9; --completed-hover:#ffedb5; --completed-rim:#ead58a;
+  --read-surface:#edf5e8; --read-hover:#e2efdd;
+  --sage:#8da58d; --sage-soft:#deeddc; --glass:rgba(242,248,237,.96);
   --hud-font:ui-monospace,"SFMono-Regular",Menlo,monospace;
   --banana-image:url('/shell/assets/monkey-banana-2026-09-07/pixel-banana-v4-diagonal.png');
   --banana-peel-image:url('/shell/assets/monkey-banana-2026-09-07/pixel-banana-peel-v1.png');
@@ -76,13 +79,32 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .filter span{display:inline-block;min-width:17px;padding:1px 3px;border-radius:0;clip-path:var(--pixel-corners);background:var(--tab-tint);color:var(--tab-ink);font:750 9px/13px var(--hud-font);margin-left:2px;vertical-align:baseline}
 .filter.active span{background:var(--tab-ink);color:#fff}
 .task-list{flex:1;min-height:0;overflow:auto;padding:0 9px 8px;margin:0;background:transparent;border:0;box-shadow:none;scrollbar-width:thin;scrollbar-color:#bacfb5 transparent}
-/* 42px rows and 4px gutters retain seven complete tasks in a 420px board. */
-.task-button{display:flex;width:100%;gap:7px;text-align:left;padding:5px 8px;border:1px solid transparent;border-radius:12px;min-height:42px;align-items:flex-start;margin-bottom:4px;transition:background 140ms ease,border-color 140ms ease}
-.task-button[data-status=unread]{background:var(--yellow-soft);border-color:transparent}
-.task-button[data-status=unread]:hover{background:var(--fruit-hover)}
-.task-button[data-status=running]{background:var(--green-soft);border-color:transparent}
-.task-button[data-status=running]:hover{background:var(--leaf-hover)}
-.task-button[aria-pressed=true]{border-color:var(--green);box-shadow:inset 0 0 0 1px #ffffff80}
+/* Bright project dots support grouping; card surfaces and badges communicate task state. */
+.project-heading{--project-accent:#3986e6}
+.project-heading[data-project-tone="0"]{--project-accent:#3986e6}
+.project-heading[data-project-tone="1"]{--project-accent:#9264dc}
+.project-heading[data-project-tone="2"]{--project-accent:#20a4b5}
+.project-heading[data-project-tone="3"]{--project-accent:#ed8064}
+.project-heading[data-project-tone="4"]{--project-accent:#e6679f}
+.project-heading[data-project-tone="5"]{--project-accent:#21aa86}
+.project-heading[data-project-tone="6"]{--project-accent:#e4ad35}
+.project-heading[data-project-tone="7"]{--project-accent:#647de0}
+.project-heading{display:flex;align-items:center;gap:5px;min-height:17px;margin:4px 2px 3px;padding:1px 7px;color:var(--ink);font-size:8px;line-height:13px}
+.project-heading:first-child{margin-top:0}
+.project-heading strong{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;font-weight:750}
+.project-swatch{width:6px;height:6px;flex:none;background:var(--project-accent);border-radius:50%}
+.project-count{min-width:14px;padding:0 3px;text-align:center;color:var(--ink);background:var(--sage-soft);font:750 8px/12px var(--hud-font);clip-path:var(--pixel-corners)}
+/* Running motion and the completed honey badge carry the primary state cues. */
+.task-button{position:relative;overflow:hidden;display:flex;width:100%;gap:7px;text-align:left;padding:5px 8px 5px 10px;border:1px solid transparent;border-radius:12px;min-height:42px;align-items:flex-start;margin-bottom:3px;background:var(--read-surface);transition:background 140ms ease,border-color 140ms ease}
+.task-button::after{content:"";position:absolute;left:10px;right:8px;bottom:0;height:2px;pointer-events:none;opacity:0}
+.task-button[data-status=running]{background:var(--running-surface);border-color:var(--running-rim)}
+.task-button[data-status=running]::after{opacity:1;background:repeating-linear-gradient(90deg,#2b9b50 0 7px,transparent 7px 10px);background-size:20px 100%;animation:status-flow 1.15s linear infinite}
+.task-button[data-status=unread]{background:var(--completed-surface);border-color:var(--completed-rim)}
+@keyframes status-flow{to{background-position:20px 0}}
+.task-button:is(:hover,:focus-visible){background:var(--read-hover)}
+.task-button[data-status=running]:is(:hover,:focus-visible){background:var(--running-hover)}
+.task-button[data-status=unread]:is(:hover,:focus-visible){background:var(--completed-hover)}
+.task-button[aria-pressed=true]{border-color:#829987;box-shadow:inset 0 0 0 1px #ffffff80}
 .task-state{width:11px;height:11px;flex:none;margin-top:2px;position:relative}
 /* Green fruit is still growing; ripe yellow fruit is ready to read and collect. */
 .task-button[data-status=running] .task-state{--banana-sprite:var(--banana-green-image);--banana-size:var(--banana-unripe-size);--growth-delay:0s}
@@ -96,9 +118,8 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .task-button[data-status=running] .task-state,.app-shell .task-button[data-status=unread] .task-state{height:16px;margin-top:0}
 .task-button[data-status=running] .task-state::before,.app-shell .task-button[data-status=unread] .task-state::after{content:"";position:absolute;left:50%;top:50%;width:var(--banana-size);height:var(--banana-size);margin-left:calc(var(--banana-size) * -.5);margin-top:calc(var(--banana-size) * -.5);background:var(--banana-sprite) center/contain no-repeat;image-rendering:pixelated}
 .app-shell .task-button[data-status=unread] .task-state{transition:transform 160ms cubic-bezier(.2,.8,.3,1)}
-.app-shell .task-button[data-status=unread]:is(:hover,:focus-visible){background:var(--fruit-hover);border-color:var(--fruit-rim)}
 .app-shell .task-button[data-status=unread]:is(:hover,:focus-visible) .task-state{transform:translateY(-2px) rotate(-12deg) scale(1.2)}
-.app-shell .task-button[data-status=unread]:active{background:#ffedb1;transform:scale(.98)}
+.app-shell .task-button[data-status=unread]:active{background:var(--completed-hover);transform:scale(.98)}
 .app-shell .task-button[data-status=unread]:active .task-state{transform:translateY(1px) rotate(7deg) scale(.82)}
 .task-button[data-status=read] .task-state{height:16px;margin-top:0}
 .task-button[data-status=read] .task-state::after{content:"";position:absolute;left:50%;top:50%;width:16px;height:16px;transform:translate(-50%,-50%);background:var(--banana-peel-image) center/contain no-repeat;image-rendering:pixelated;filter:saturate(.65);opacity:.8}
@@ -107,8 +128,12 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .task-title-line{display:flex;gap:6px;align-items:center;min-width:0}
 .task-copy strong{font-size:12px;font-weight:650;display:block;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:16px;color:var(--ink)}
 .row-status{font-size:9px;line-height:14px;flex:none;color:var(--muted);font-weight:500;white-space:nowrap;padding:0 5px;border-radius:0;clip-path:var(--pixel-corners)}
+.task-button:is([data-status=running],[data-status=unread]) .row-status::before{content:"";display:inline-block;width:5px;height:5px;margin-right:3px;vertical-align:1px;background:currentColor}
+.task-button[data-status=running] .row-status::before{border-radius:50%;animation:status-pulse 1.2s steps(2,end) infinite}
+.task-button[data-status=unread] .row-status::before{clip-path:polygon(0 0,100% 0,100% 60%,60% 60%,60% 100%,0 100%)}
+@keyframes status-pulse{50%{opacity:.35;transform:scale(.75)}}
 .task-button[data-status=running] .row-status{color:var(--green-ink);background:#cce8d2;font-weight:650}
-.task-button[data-status=unread] .row-status{color:var(--yellow-ink);background:#ffe89a;font-weight:650}
+.task-button[data-status=unread] .row-status{color:var(--yellow-ink);background:#ffe58a;font-weight:650}
 .task-button[data-status=read] .task-copy strong{color:#52694f;font-weight:550}
 .task-meta{display:flex;gap:6px;align-items:center;margin-top:1px;font-size:9px;line-height:13px;color:var(--muted)}
 .task-meta .stage{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

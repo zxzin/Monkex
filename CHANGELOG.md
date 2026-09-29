@@ -2,6 +2,11 @@
 
 ## Unreleased — 2026-09-12
 
+- Track hover against the native window's physical bounds while other apps are focused. A short hover dwell preserves press-to-drag; pointer exit/reentry, manual collapse and pin behavior have focused regression coverage. Browser previews retain DOM tracking.
+
+- Use a fresh leaf-green palette with bright project dots. Running rows use a richer green surface, pulsing marker and moving green bottom rail; completed unread rows use a banana-yellow surface, soft gold border and completed badge. Project headings and counts share deep-green text.
+- Group conversations by their exact local project path and assign each project a stable shared color. Project headings expose the short folder name and task count without placing full local paths in the page; task-state bananas and badges remain independent.
+- Open the unpinned board by hovering the banana tree and collapse it after the pointer leaves the window. Hover expansion keeps the current application focused; the pin retains the board.
 - Recover automatically when the native WebView fails to finish the first frontend boot. A one-shot cache-busted reload now restores task and quota polling; a persistent second failure becomes visible instead of leaving the board on the initial loading screen forever.
 - Make the banana-coin refresh a full Codex resync: restart the local app-server session, discard account-derived task and quota caches, and rebuild the board from the currently signed-in account.
 - Apply unread/read/running priority changes immediately while a task row is hovered or focused. Newly completed unread tasks move above running tasks; routine progress updates retain stable ordering. Added combined sorting/rendering regression coverage, including checks against an installed app script.

@@ -15,34 +15,37 @@ class Element {
 const list=new Element('div');
 const state={threads:[{id:'a',name:'A',status:'running'},{id:'b',name:'B',status:'running'}],filter:'running',connected:true,listBusy:false};
 const ctx={state,Set,document:{createElementNS:(ns,tag)=>new Element(tag)},$:()=>list,node:(tag,cls,text)=>Object.assign(new Element(tag),{className:cls,textContent:text}),relativeTime:()=>'',selectThread:()=>{},filtered:()=>state.threads.filter(t=>state.filter!=='running'||t.status==='running')};
+const taskRows=()=>list.children.filter(row=>row.dataset.threadId);
 ctx.syncBoardSize=()=>{};
 vm.createContext(ctx);
 vm.runInContext(source.slice(source.indexOf('function activityTime('),source.indexOf('function boardSets(')),ctx);
 vm.runInContext(source.slice(source.indexOf('function shortStatus('),source.indexOf('async function api(')),ctx);
+vm.runInContext(source.slice(source.indexOf('function projectIdentity('),source.indexOf('function renderList(')),ctx);
 vm.runInContext(source.slice(source.indexOf('function renderList('),source.indexOf('async function refresh(')),ctx);
 ctx.renderList();
-assert.equal(list.children.length,2);
+assert.equal(taskRows().length,2);
+assert.equal(list.children.filter(row=>row.className==='project-heading').length,1);
 state.listBusy=true;
 state.threads.reverse();
 ctx.renderList();
-assert.equal(list.children[0].dataset.threadId,'a','hover preserves ordering');
+assert.equal(taskRows()[0].dataset.threadId,'a','hover preserves ordering');
 state.threads.find(t=>t.id==='a').status='completed';
 ctx.renderList();
-assert.equal(list.children.length,1,'completed task leaves running filter while hovered');
-assert.equal(list.children[0].dataset.threadId,'b');
+assert.equal(taskRows().length,1,'completed task leaves running filter while hovered');
+assert.equal(taskRows()[0].dataset.threadId,'b');
 state.filter='all';
 ctx.renderList(true);
 state.threads.find(t=>t.id==='b').status='interrupted';
 ctx.renderList();
 assert.equal(list.children.find(t=>t.dataset.threadId==='b').dataset.status,'read','non-running badge follows its read receipt');
 for(const status of ['waiting_user','result_ready','completed','failed','interrupted','unknown']){
-  assert.equal(ctx.shortStatus({status,unread:true}),'未读');
+  assert.equal(ctx.shortStatus({status,unread:true}),'已完成');
   assert.equal(ctx.shortStatus({status,unread:false}),'已读');
 }
 assert.equal(ctx.shortStatus({status:'running',unread:false}),'进行中','reading an active task retains its running state');
 assert.equal(ctx.shortStatus({status:'running',unread:true}),'进行中','current runtime takes precedence over an older unread result');
 state.connected=false;
-assert.equal(ctx.shortStatus({status:'running',unread:true}),'未读','disconnected runtime is not presented as actively running');
+assert.equal(ctx.shortStatus({status:'running',unread:true}),'已完成','disconnected runtime is presented as a completed unread result');
 state.connected=true;
 state.threads[0].activity_excerpt='PRIVATE_BODY_SHOULD_ONLY_APPEAR_EXPANDED';
 ctx.renderList(true);
@@ -50,7 +53,7 @@ assert.ok(!JSON.stringify(list).includes('PRIVATE_BODY_SHOULD_ONLY_APPEAR_EXPAND
 state.threads[0].summary='修订住房报告中的五类角色诉求';
 const originalName=state.threads[0].name;
 ctx.renderList(true);
-const summaryRow=list.children.find(t=>t.dataset.threadId===state.threads[0].id);
+const summaryRow=taskRows().find(t=>t.dataset.threadId===state.threads[0].id);
 assert.equal(summaryRow.children[1].children[0].children[0].textContent,originalName,'original Codex title remains visible and unchanged');
 assert.equal(summaryRow.children[1].children[1].children[0].textContent,state.threads[0].summary,'second line displays existing Codex progress');
 assert.equal(summaryRow.children[1].children.length,2,'progress keeps the compact two-line row');
@@ -96,17 +99,32 @@ ctx.renderList(true);
 state.listBusy=true;
 Object.assign(state.threads[2],{status:'result_ready',unread:true,updated_at:now+1});
 ctx.renderList();
-assert.deepEqual(list.children.map(row=>row.dataset.threadId),['c','a','b'],
+assert.deepEqual(taskRows().map(row=>row.dataset.threadId),['c','a','b'],
   'new unread completion rises immediately even while hovered or focused');
 assert.equal(state.queuedRender,false,'priority transitions are applied immediately');
 state.filter='recent';ctx.renderList(true);
 Object.assign(state.threads[1],{status:'result_ready',unread:true,updated_at:now+2});
 ctx.renderList();
-assert.deepEqual(list.children.map(row=>row.dataset.threadId),['b','c','a']);
+assert.deepEqual(taskRows().map(row=>row.dataset.threadId),['b','c','a']);
 state.threads[1].unread=false;ctx.renderList();
-assert.deepEqual(list.children.map(row=>row.dataset.threadId),['c','b','a'],
+assert.deepEqual(taskRows().map(row=>row.dataset.threadId),['c','b','a'],
   'read transition moves behind unread results while focused');
 state.threads[2].status='running';ctx.renderList();
-assert.deepEqual(list.children.map(row=>row.dataset.threadId),['b','c','a'],
+assert.deepEqual(taskRows().map(row=>row.dataset.threadId),['b','c','a'],
   'resuming returns the row to the running group');
-console.log('PASS: hover stability, live priority transitions, completion removal, badges, progress and navigation');
+state.listBusy=false;state.filter='recent';
+state.threads=[
+  {id:'p1-new',name:'P1 new',status:'result_ready',unread:true,updated_at:now+4,cwd:'/work/project-one',project_label:'Project One'},
+  {id:'p2',name:'P2',status:'result_ready',unread:true,updated_at:now+3,cwd:'/work/project-two',project_label:'Project Two'},
+  {id:'p1-old',name:'P1 old',status:'running',unread:false,updated_at:now+2,cwd:'/work/project-one',project_label:'Project One'},
+];
+ctx.renderList(true);
+assert.deepEqual(taskRows().map(row=>row.dataset.threadId),['p1-new','p1-old','p2'],'same-project conversations stay contiguous');
+const projectOneRows=taskRows().filter(row=>row.dataset.threadId.startsWith('p1-'));
+assert.equal(projectOneRows[0].dataset.projectTone,projectOneRows[1].dataset.projectTone,'same project receives one stable color');
+assert.notEqual(projectOneRows[0].dataset.projectTone,taskRows().find(row=>row.dataset.threadId==='p2').dataset.projectTone,'sample projects receive distinct palette tones');
+const headings=list.children.filter(row=>row.className==='project-heading');
+assert.deepEqual(headings.map(row=>row.children[1].textContent),['Project One','Project Two']);
+assert.equal(headings[0].dataset.projectTone,projectOneRows[0].dataset.projectTone,'project heading and its conversations share color');
+assert.ok(!JSON.stringify(list).includes('/work/project-one'),'full local project path is not exposed in the DOM');
+console.log('PASS: project grouping/colors, hover stability, live priority transitions, badges and navigation');

@@ -7,7 +7,9 @@ const state = {
   mode: "compact", pinned: localStorage.getItem("twin-pinned") === "true",
   connected: false, refreshing: false, listBusy: false, queuedRender: false,
   petInteractionTimer: null, petInteractionResolve: null, petInteractionToken: 0,
-  petInteractionCooldownUntil: 0, boardSize: 0, autoCollapseTimer: null, selectionRevision: 0,
+  petInteractionCooldownUntil: 0, boardSize: 0, autoCollapseTimer: null, hoverCollapseTimer: null,
+  pointerInside: false, selectionRevision: 0, nativePointerInside: null,
+  hoverExpandTimer: null, hoverPollTimer: null, hoverTrackingStopped: false, petDragging: false,
 };
 const PET_POSES = new Set(["idle", "hello", "peek", "nod"]);
 
@@ -87,7 +89,7 @@ function node(tag, className, text) {
   return e;
 }
 function shortStatus(card) {
-  return {running:"Running",unread:"Unread",read:"Read"}[displayStatus(card)];
+  return {running:"Running",unread:"Completed",read:"Read"}[displayStatus(card)];
 }
 function displayStatus(card) {
   return state.connected&&card.status==="running"?"running":card.unread?"unread":"read";
@@ -131,6 +133,7 @@ function renderTokenFan(container,tokens,running) {
 function updateTaskRow(button,card) {
   const status=displayStatus(card);
   button.dataset.status=status;button.dataset.threadId=card.id;
+  button.dataset.projectTone=projectTone(card);
   button.setAttribute("aria-pressed",String(card.id===state.selectedThreadId));
   button.setAttribute("aria-busy",String(card.id===state.openingId));
   button.disabled=card.id===state.openingId;
@@ -172,17 +175,19 @@ function relativeTime(value) {
   if(seconds<86400) return Math.floor(seconds/3600)+" hr ago";
   return Math.floor(seconds/86400)+" d ago";
 }
-function mode(value) {
+function mode(value, options = {}) {
   state.mode = value;
   cancelAutoCollapse();
+  cancelHoverCollapse();
+  cancelHoverExpand();
   if(value==="collapsed")state.readPlay?.suspend();
   state.petExpanded = value !== "collapsed";
   if (state.petExpanded) stopPetInteraction();
   document.documentElement.dataset.mode = value;
   $("petShell").hidden = !state.petMode || value !== "collapsed";
   $("appShell").hidden = state.petMode && value === "collapsed";
-  if(value==="compact")syncBoardSize(true);
-  else if(state.petMode)invokeDesktop("set_pet_view",{view:value}).catch(e=>banner("Could not resize window: "+e));
+  if(value==="compact")syncBoardSize(true,options.activate!==false);
+  else if(state.petMode)invokeDesktop("set_pet_view",{view:value,activate:false}).catch(e=>banner("Could not resize window: "+e));
 }
 function updateCounts() {
   state.readPlay?.syncPocket();
@@ -213,8 +218,8 @@ function updateCounts() {
   $("petLauncher").dataset.state=activity.state;
   $("petCharacter").dataset.running=String(activity.running);
   const quotaLabel=quota.state==="unknown"?"Weekly quota pending":"Weekly "+quota.label;
-  $("petLauncher").title=label+" · "+quotaLabel+" · Hold to drag · Click to expand · Right-click to quit";
-  $("petLauncher").setAttribute("aria-label",label+", "+quotaLabel+", open task board");
+  $("petLauncher").title=label+" · "+quotaLabel+" · Hold to drag · Hover or click to expand · Right-click to quit";
+  $("petLauncher").setAttribute("aria-label",label+", "+quotaLabel+", hover or click to open task activity");
   window.WorkTwinBananaTree?.render($("petHarvest"),unread,state.connected);
   window.WorkTwinBananaTree.renderGrowth($("petGrowth"),running,state.connected);
 }
@@ -255,7 +260,38 @@ function boardSets(now=Date.now()/1000) {
 }
 function filtered() {
   const rank=t=>state.connected&&t.status==="running"?2:state.filter==="recent"&&!t.unread?1:0;
-  return (boardSets()[state.filter]||[]).sort((a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
+  const sorted=(boardSets()[state.filter]||[]).sort((a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
+  return projectGroups(sorted).flatMap(group=>group.cards);
+}
+function projectIdentity(card) {
+  return String(card.cwd||card.project_label||"Unlinked tasks");
+}
+function projectLabel(card) {
+  if(card.project_label)return String(card.project_label);
+  const parts=String(card.cwd||"").split(/[\\/]/).filter(Boolean);
+  return parts.at(-1)||"Unlinked tasks";
+}
+function projectTone(card) {
+  let hash=2166136261;
+  for(const character of projectIdentity(card))hash=Math.imul(hash^character.codePointAt(0),16777619);
+  return String((hash>>>0)%8);
+}
+function projectGroups(cards) {
+  const groups=[],byProject=new Map();
+  for(const card of cards){
+    const key=projectIdentity(card);
+    let group=byProject.get(key);
+    if(!group){group={key,label:projectLabel(card),tone:projectTone(card),cards:[]};byProject.set(key,group);groups.push(group);}
+    group.cards.push(card);
+  }
+  return groups;
+}
+function projectHeading(group) {
+  const heading=node("div","project-heading");
+  heading.dataset.projectTone=group.tone;
+  heading.setAttribute("role","heading");heading.setAttribute("aria-level","2");
+  heading.append(node("span","project-swatch"),node("strong","",group.label),node("span","project-count",String(group.cards.length)));
+  return heading;
 }
 function renderList(force=false) {
   const list=$("taskList");
@@ -271,11 +307,15 @@ function renderList(force=false) {
     if(!priorityChanged&&existing.size===wanted.size&&[...existing.keys()].every(id=>wanted.has(id))){state.queuedRender=true;syncBoardSize();return;}
   }
   state.queuedRender=false;
-  const rows=wantedCards.map(t=>{
-    const b=existing.get(t.id)||node("button","task-button");b.type="button";
-    if(!existing.has(t.id))b.addEventListener("click",()=>selectThread(t.id));
-    updateTaskRow(b,t);return b;
-  });
+  const rows=[];
+  for(const group of projectGroups(wantedCards)){
+    rows.push(projectHeading(group));
+    for(const t of group.cards){
+      const b=existing.get(t.id)||node("button","task-button");b.type="button";
+      if(!existing.has(t.id))b.addEventListener("click",()=>selectThread(t.id));
+      updateTaskRow(b,t);rows.push(b);
+    }
+  }
   if(!rows.length)rows.push(node("p","empty-note",state.filter==="board"?(state.connected?"All caught up\nRecent results are in 24 hours":"Waiting for running status"):state.filter==="history"?"No tasks from 24 hours to 7 days ago":"No tasks in the last 24 hours"));
   const scroll=$("taskList").scrollTop;
   $("taskList").replaceChildren(...rows);$("taskList").scrollTop=scroll;
@@ -311,27 +351,73 @@ async function refresh(force=false) {
   })();
   return state.refreshPromise;
 }
-function boardHeight(count,extra=0) {
-  return Math.min(420,Math.max(180,92+Math.max(1,count)*46+extra));
+function boardHeight(count,extra=0,groupCount=0) {
+  return Math.min(420,Math.max(180,92+Math.max(1,count)*46+Math.min(groupCount,7)*18+extra));
 }
-function syncBoardSize(force=false) {
+function syncBoardSize(force=false,activate=true) {
   if(state.mode!=="compact")return;
   const extra=$("systemBanner").hidden?0:$("systemBanner").offsetHeight;
-  const height=boardHeight(filtered().length,extra);
+  const cards=filtered();
+  const height=boardHeight(cards.length,extra,projectGroups(cards).length);
   if(!force&&height===state.boardSize)return;
   state.boardSize=height;document.documentElement.style.setProperty("--board-height",height+"px");
-  if(state.petMode)invokeDesktop("set_pet_view",{view:"compact",height}).catch(()=>{});
+  if(state.petMode)invokeDesktop("set_pet_view",{view:"compact",height,activate}).catch(()=>{});
 }
 function cancelAutoCollapse() {
   clearTimeout(state.autoCollapseTimer);state.autoCollapseTimer=null;
 }
+function cancelHoverCollapse() {
+  clearTimeout(state.hoverCollapseTimer);state.hoverCollapseTimer=null;
+}
+function expandFromHover() {
+  state.pointerInside=true;cancelHoverCollapse();
+  if(state.petMode&&state.mode==="collapsed"&&!state.petDragging)mode("compact",{activate:false});
+}
+function cancelHoverExpand() {
+  clearTimeout(state.hoverExpandTimer);state.hoverExpandTimer=null;
+}
+function scheduleHoverExpand() {
+  state.pointerInside=true;cancelHoverCollapse();cancelHoverExpand();
+  if(!state.petMode||state.mode!=="collapsed"||state.petDragging)return;
+  // Allow a press to claim the tree for dragging before the board replaces it.
+  state.hoverExpandTimer=setTimeout(()=>{state.hoverExpandTimer=null;if(state.pointerInside)expandFromHover();},180);
+}
+function onNativePointer(inside) {
+  if(typeof inside!=="boolean"||!state.petMode||inside===state.nativePointerInside)return;
+  state.nativePointerInside=inside;
+  if(inside)scheduleHoverExpand();
+  else{cancelHoverExpand();scheduleHoverCollapse();}
+}
+async function pollNativePointer() {
+  if(state.hoverTrackingStopped)return;
+  try{
+    const inside=await invokeDesktop("pet_pointer_inside");
+    if(!state.hoverTrackingStopped)onNativePointer(inside);
+  }catch(error){
+    // Older native hosts retain DOM tracking until a native sample succeeds.
+    if(!state.hoverPollWarned){console.warn("Monkex native hover unavailable",error);state.hoverPollWarned=true;}
+  }finally{
+    if(!state.hoverTrackingStopped)state.hoverPollTimer=setTimeout(pollNativePointer,120);
+  }
+}
+function stopHoverTracking() {
+  state.hoverTrackingStopped=true;clearTimeout(state.hoverPollTimer);cancelHoverExpand();cancelHoverCollapse();
+}
+function scheduleHoverCollapse() {
+  state.pointerInside=false;cancelHoverCollapse();
+  if(!state.petMode||state.mode!=="compact"||state.pinned||state.navigation?.pending)return;
+  state.hoverCollapseTimer=setTimeout(()=>{
+    state.hoverCollapseTimer=null;
+    if(!state.pointerInside&&!state.pinned&&state.mode==="compact"&&!state.navigation?.pending)mode("collapsed");
+  },300);
+}
 function syncPin() {
-  const label=state.pinned?"Unpin · Collapse when switching windows":"Pin · Stay open when switching windows";
+  const label=state.pinned?"Unpin · Restore collapse on pointer leave":"Pin · Stay open after the pointer leaves";
   $("pinButton").setAttribute("aria-pressed",String(state.pinned));
   $("pinButton").setAttribute("aria-label",label);$("pinButton").title=label;
 }
 function togglePin() {
-  state.pinned=!state.pinned;cancelAutoCollapse();
+  state.pinned=!state.pinned;cancelAutoCollapse();cancelHoverCollapse();
   try{localStorage.setItem("twin-pinned",String(state.pinned));}catch{}
   syncPin();
 }
@@ -383,9 +469,11 @@ async function refreshFromCoin(event) {
 function bindPetDrag() {
   const tree=$("petLauncher");
   let press=null,dragged=false,moves=Promise.resolve();
-  const release=()=>{if(press&&tree.hasPointerCapture?.(press.id))tree.releasePointerCapture(press.id);press=null;};
+  const release=()=>{if(press&&tree.hasPointerCapture?.(press.id))tree.releasePointerCapture(press.id);press=null;state.petDragging=false;};
   tree.onpointerdown=e=>{
     if(e.button!==0||!state.petMode)return;
+    cancelHoverCollapse();
+    cancelHoverExpand();state.petDragging=true;
     dragged=false;press={id:e.pointerId,x:e.screenX,y:e.screenY};
     tree.setPointerCapture(e.pointerId);e.preventDefault();
   };
@@ -439,7 +527,11 @@ function bind() {
   list.onfocusout=()=>setTimeout(()=>{if(!list.contains(document.activeElement)&&!list.matches(":hover")){state.listBusy=false;if(state.queuedRender)renderList();}},0);
   $("dragArea").onmousedown=e=>{if(e.button===0&&state.petMode){e.preventDefault();invokeDesktop("start_window_drag");}};
   bindPetDrag();
-  $("petLauncher").onmouseenter=()=>{if(Date.now()>state.petInteractionCooldownUntil){state.petInteractionCooldownUntil=Date.now()+2000;playPetInteraction(["hello","peek","idle"],380);}};
+  // Native samples own desktop hover even while another application has focus.
+  // DOM events serve browser previews and older hosts until the first sample.
+  $("petLauncher").onmouseenter=()=>{if(state.nativePointerInside===null)scheduleHoverExpand();};
+  document.documentElement.addEventListener("pointerenter",()=>{if(state.nativePointerInside===null){state.pointerInside=true;cancelHoverCollapse();}});
+  document.documentElement.addEventListener("pointerleave",()=>{if(state.nativePointerInside===null){cancelHoverExpand();scheduleHoverCollapse();}});
   $("petShell").oncontextmenu=e=>{if(window.__TAURI__){e.preventDefault();invokeDesktop("show_pet_menu",{x:e.clientX,y:e.clientY,lang:document.documentElement.lang});}};
   window.addEventListener("work-twin-pet-mode",e=>mode(e.detail?.expanded?"compact":"collapsed"));
 }
@@ -452,9 +544,12 @@ async function init() {
   bind();
   window.addEventListener("pagehide",stopPetInteraction);
   window.addEventListener("pagehide",cancelAutoCollapse);
+  window.addEventListener("pagehide",cancelHoverCollapse);
+  window.addEventListener("pagehide",stopHoverTracking);
   window.addEventListener("pagehide",stopQuotaCoinFeedback);
   window.addEventListener("pagehide",()=>state.readPlay?.dispose());
   mode(state.petMode&&!state.pinned&&params.get("expanded")!=="1"?"collapsed":"compact");
+  if(state.petMode&&window.__TAURI__?.core?.invoke)pollNativePointer();
   await refresh();
   document.documentElement.dataset.monkexBoot="ready";
   try{sessionStorage.removeItem("monkex-boot-retry");}catch{}

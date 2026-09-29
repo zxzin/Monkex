@@ -63,8 +63,26 @@ fn compact_height(height: Option<f64>) -> f64 {
     height.filter(|value| value.is_finite()).unwrap_or(COMPACT_HEIGHT).clamp(180.0, COMPACT_HEIGHT)
 }
 
+fn pointer_in_bounds(cursor: PhysicalPosition<f64>, origin: PhysicalPosition<i32>, size: tauri::PhysicalSize<u32>) -> bool {
+    cursor.x >= origin.x as f64 && cursor.y >= origin.y as f64
+        && cursor.x < origin.x as f64 + size.width as f64
+        && cursor.y < origin.y as f64 + size.height as f64
+}
+
 #[tauri::command]
-fn set_pet_view(window: WebviewWindow, view: String, height: Option<f64>) -> Result<(), String> {
+fn pet_pointer_inside(window: WebviewWindow) -> Result<bool, String> {
+    // Desktop coordinates work for inactive windows and across monitor scales.
+    // Only membership in our visible window crosses the IPC boundary.
+    if !window.is_visible().map_err(|error| error.to_string())? { return Ok(false); }
+    Ok(pointer_in_bounds(
+        window.cursor_position().map_err(|error| error.to_string())?,
+        window.inner_position().map_err(|error| error.to_string())?,
+        window.inner_size().map_err(|error| error.to_string())?,
+    ))
+}
+
+#[tauri::command]
+fn set_pet_view(window: WebviewWindow, view: String, height: Option<f64>, activate: Option<bool>) -> Result<(), String> {
     let (width, height) = match view.as_str() {
         "collapsed" => (COLLAPSED_WIDTH, COLLAPSED_HEIGHT),
         "compact" => (COMPACT_WIDTH, compact_height(height)),
@@ -76,7 +94,7 @@ fn set_pet_view(window: WebviewWindow, view: String, height: Option<f64>) -> Res
         .to_logical::<f64>(window.scale_factor().map_err(|error| error.to_string())?)
         .width <= COLLAPSED_WIDTH + 1.0;
     resize_window(&window, width, height)?;
-    if view == "compact" && was_collapsed {
+    if view == "compact" && was_collapsed && activate.unwrap_or(true) {
         window.set_focus().map_err(|error| error.to_string())?;
     }
     Ok(())
@@ -308,6 +326,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             set_pet_view,
+            pet_pointer_inside,
             start_window_drag,
             move_pet_window,
             show_pet_menu
@@ -374,6 +393,17 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pointer_membership_uses_physical_bounds_and_excludes_far_edges() {
+        let origin=PhysicalPosition::new(-600, 200);
+        let size=tauri::PhysicalSize::new(152, 152);
+        assert!(pointer_in_bounds(PhysicalPosition::new(-600.0,200.0),origin,size));
+        assert!(pointer_in_bounds(PhysicalPosition::new(-500.0,300.0),origin,size));
+        assert!(!pointer_in_bounds(PhysicalPosition::new(-448.0,300.0),origin,size));
+        assert!(!pointer_in_bounds(PhysicalPosition::new(-500.0,352.0),origin,size));
+        assert!(!pointer_in_bounds(PhysicalPosition::new(-601.0,300.0),origin,size));
+        assert!(!pointer_in_bounds(PhysicalPosition::new(f64::NAN,300.0),origin,size));
+    }
     #[test]
     fn compact_size_is_bounded_and_defaults_to_dense_board() {
         assert_eq!(compact_height(None), 420.0);

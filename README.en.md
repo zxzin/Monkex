@@ -4,9 +4,10 @@
 
 Keep an eye on your Codex tasks from a little pixel-art banana tree.
 
-- Small green bananas indicate running tasks; ripe yellow ones indicate recent unread results.
-- Click the tree to open the board, then a task to return to its original Codex conversation.
-- Hold anywhere on the tree to drag it. An unpinned board collapses when you switch windows.
+- Small green bananas and a moving green rail indicate running tasks; ripe yellow bananas and honey-gold badges indicate completed results waiting to be read.
+- Click or hover over the tree to open the board, then a task to return to its original Codex conversation.
+- Conversations from the same local project stay together, identified by a small bright color dot beside the heading. The fresh leaf-green palette uses richer green cards for running tasks and banana-yellow cards with a soft gold border for completed results.
+- Hold anywhere on the tree to drag it. An unpinned board collapses when the pointer leaves or you switch windows; pinning keeps it open.
 - Collect a banana when a result is successfully opened and marked read from the board. The avatar counts your local weekly harvest.
 - See your remaining weekly quota. Click the banana coin to rebuild the local Codex connection and fully reload tasks, read state and quota from the currently signed-in account; it turns slowly when recent token use is observed.
 - Right-click the tree to quit. The running app stays out of the macOS Dock and Windows taskbar.

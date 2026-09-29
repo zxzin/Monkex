@@ -10,10 +10,18 @@ assert.match(css,/\.weekly-quota\[data-state=low\]\{background:var\(--red-soft\)
 assert.ok(css.includes('.pin-button[aria-pressed=true] .pin-head{fill:var(--yellow)}'));
 assert.match(css,/\.task-button\[data-status=unread\] \.row-status\{color:var\(--yellow-ink\)/);
 assert.match(css,/\.task-button\[data-status=running\] \.row-status\{color:var\(--green-ink\)/);
-assert.match(css,/\.task-button\[data-status=unread\]\{background:var\(--yellow-soft\)/);
-assert.match(css,/\.task-button\[data-status=running\]\{background:var\(--green-soft\)/);
+assert.match(css,/\.task-button\[data-status=running\]\{background:var\(--running-surface\);border-color:var\(--running-rim\)\}/);
+assert.match(css,/\.task-button\[data-status=unread\]\{background:var\(--completed-surface\);border-color:var\(--completed-rim\)\}/);
+assert.match(css,/\.task-button\[data-status=running\]::after\{[^}]*repeating-linear-gradient\([^}]*animation:status-flow 1\.15s linear infinite/);
+assert.match(css,/\.task-button\[data-status=running\] \.row-status::before\{[^}]*border-radius:50%;animation:status-pulse/);
+assert.match(css,/\.task-button\[data-status=unread\] \.row-status::before\{[^}]*clip-path:polygon/);
+assert.match(css,/\.project-heading\{--project-accent:/);
+assert.ok(!css.includes('--project-tint'),'project identity cannot overwrite task-state surfaces');
+assert.ok(!css.includes('--project-hover'),'project identity cannot overwrite task-state hover surfaces');
+for(let tone=0;tone<8;tone++)assert.match(css,new RegExp(`data-project-tone="${tone}"`));
+assert.match(css,/\.project-heading\{[^}]*display:flex/);
 assert.ok(!css.includes('var(--blue'),'active theme uses fruit and leaf roles');
-assert.match(css,/--glass:rgba\(242,248,237,\.92\)/);
+assert.match(css,/--glass:rgba\(242,248,237,\.96\)/);
 assert.match(css,/\.pet-quota strong\{[^}]*color:var\(--green-ink\)/);
 assert.match(css,/\.task-button\{[^}]*min-height:42px/);
 assert.match(css,/--pixel-corners:polygon/);
@@ -37,7 +45,7 @@ assert.match(css,/@supports \(backdrop-filter:blur\(1px\)\)/);
 assert.match(css,/@media\(prefers-reduced-transparency:reduce\).*background:#fff!important/);
 assert.match(css,/@media\(prefers-reduced-motion:reduce\).*animation:none!important/);
 const luminance=hex=>hex.match(/../g).map(x=>parseInt(x,16)/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4).reduce((s,x,i)=>s+x*[.2126,.7152,.0722][i],0);
-for(const [fg,bg] of [['23673b','cce8d2'],['725300','ffe89a'],['b32923','ffefed'],['725300','ffd33d'],['183b27','fff6d6'],['183b27','e5f4e8'],['53694e','fff6d6'],['53694e','e5f4e8'],['5b7160','f2f8ed'],['52643a','e7edd7'],['52694f','f2f8ed']]){
+for(const [fg,bg] of [['23673b','cce8d2'],['725300','ffe58a'],['b32923','ffefed'],['183b27','fff3c9'],['183b27','def2e3'],['536b59','fff3c9'],['536b59','ffedb5'],['536b59','def2e3'],['536b59','d2eada'],['536b59','f2f8ed'],['52643a','e7edd7'],['52694f','edf5e8']]){
   const l=[luminance(fg),luminance(bg)].sort((a,b)=>b-a);
   assert.ok((l[0]+.05)/(l[1]+.05)>=4.5,`${fg} on ${bg} maintains small-text contrast`);
 }

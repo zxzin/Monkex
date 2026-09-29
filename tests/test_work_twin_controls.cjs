@@ -36,7 +36,7 @@ assert.match(reopen,/expanded: true/);assert.match(reopen,/window\.set_focus\(\)
 assert.match(native,/window\.on_window_event/);
 assert.match(native,/tauri::WindowEvent::Focused\(focused\)/);
 assert.match(native,/work-twin-window-focus/);
-assert.match(native,/if view == "compact" && was_collapsed\s*\{\s*window\.set_focus\(\)/,'only opening acquires focus; live resizing preserves other app focus');
+assert.match(native,/if view == "compact" && was_collapsed && activate\.unwrap_or\(true\)\s*\{\s*window\.set_focus\(\)/,'click opening can acquire focus while hover opening preserves the active app');
 assert.match(source,/addEventListener\("work-twin-window-focus",onWindowFocus\)/);
 assert.ok(!html.includes('feed-footer'),'footer controls are removed');
 assert.match(html,/id="pinButton"[^>]*aria-pressed="false"[^>]*><svg/);
@@ -44,10 +44,10 @@ for(const removed of ['boardSettings','playFeedbackToggle','setSettings'])assert
 assert.match(html,/<div id="greetMonkey"/,'avatar is a display and weekly counter without an empty menu');
 const elements=new Map(),styles={},timers=new Map(),modes=[],writes=[],calls=[];let timerId=0;
 const $=id=>{if(!elements.has(id))elements.set(id,{hidden:true,value:'',offsetHeight:112,focus(){this.focused=true;},setAttribute(k,v){this[k]=v;}});return elements.get(id);};
-const state={mode:'compact',petMode:true,pinned:false,boardSize:0,selectionRevision:0,navigation:{pending:null,navigate:async()=>true}};
+const state={mode:'compact',petMode:true,pinned:false,boardSize:0,selectionRevision:0,autoCollapseTimer:null,hoverCollapseTimer:null,pointerInside:false,navigation:{pending:null,navigate:async()=>true}};
 const ctx={state,$,clearTimeout:id=>timers.delete(id),setTimeout:(fn,ms)=>{timers.set(++timerId,{fn,ms});return timerId;},
   document:{documentElement:{style:{setProperty:(k,v)=>styles[k]=v}}},localStorage:{setItem:(...args)=>writes.push(args)},
-  filtered:()=>Array.from({length:3}),renderList(){},mode:value=>{state.mode=value;modes.push(value);},
+  filtered:()=>Array.from({length:3}),projectGroups:cards=>[{cards}],renderList(){},mode:value=>{state.mode=value;modes.push(value);},
   invokeDesktop:(name,args)=>{calls.push({name,args});return Promise.resolve();}};
 vm.createContext(ctx);
 vm.runInContext(source.slice(source.indexOf('function boardHeight('),source.indexOf('function bind(')),ctx);
@@ -55,8 +55,12 @@ vm.runInContext(source.slice(source.indexOf('function boardHeight('),source.inde
   assert.equal(ctx.boardHeight(0),180);assert.equal(ctx.boardHeight(3),230);
   assert.equal(ctx.boardHeight(7),414);assert.equal(ctx.boardHeight(100),420);
   assert.equal(ctx.boardHeight(3,112),342);
-  ctx.syncBoardSize();assert.equal(styles['--board-height'],'230px');
-  assert.equal(calls[0].args.height,230);ctx.syncBoardSize();assert.equal(calls.length,1,'unchanged size has no native IPC');
+  ctx.syncBoardSize();assert.equal(styles['--board-height'],'248px');
+  assert.equal(calls[0].args.height,248);assert.equal(calls[0].args.activate,true);ctx.syncBoardSize();assert.equal(calls.length,1,'unchanged size has no native IPC');
+  state.mode='collapsed';ctx.expandFromHover();assert.equal(state.mode,'compact','hover opens the collapsed tree');assert.equal(state.pointerInside,true);
+  ctx.scheduleHoverCollapse();assert.equal(timers.size,1);let hover=[...timers][0];assert.equal(hover[1].ms,300);timers.delete(hover[0]);hover[1].fn();assert.equal(state.mode,'collapsed','leaving the surface collapses after a short grace period');
+  state.mode='compact';ctx.scheduleHoverCollapse();assert.equal(timers.size,1);ctx.expandFromHover();assert.equal(timers.size,0,'returning before the grace period keeps the board open');
+  state.pinned=true;ctx.scheduleHoverCollapse();assert.equal(timers.size,0,'the pin disables pointer-leave collapse');state.mode='collapsed';ctx.expandFromHover();assert.equal(state.mode,'compact','a manually collapsed pinned board can still reopen on hover');state.pinned=false;
   ctx.togglePin();assert.equal($('pinButton')['aria-pressed'],'true');assert.match($('pinButton').title,/拔起/);
   assert.deepEqual(writes[0],['twin-pinned','true']);
   await ctx.selectThread('a');assert.equal(timers.size,0,'pinned board stays expanded');

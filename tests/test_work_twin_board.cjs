@@ -71,4 +71,7 @@ state.threads.push(card('history-old',3*day),card('history-new',2*day,{unread:fa
 assert.deepEqual(ids(ctx.filtered()),['history-new','history-old'],'history retains its date range and descending time order');
 state.filter='board';
 
+state.threads=[card('alpha-new',10,{cwd:'/projects/alpha'}),card('beta',20,{cwd:'/projects/beta'}),card('alpha-run',30,{cwd:'/projects/alpha',status:'running',unread:false})];
+assert.deepEqual(ids(ctx.filtered()),['alpha-new','alpha-run','beta'],'project grouping keeps one project contiguous while preserving its internal priority');
+
 console.log('PASS: rolling 24h/7d, unread/read/running priority, viewed-result transition and chronological history');
