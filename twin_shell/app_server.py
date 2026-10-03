@@ -11,11 +11,12 @@ from typing import Any, Callable
 from .platform_support import codex_executable, process_options
 
 
-DEFAULT_CODEX_CLI = codex_executable()
-
-
 class AppServerError(RuntimeError):
     """Raised when the local Codex app-server cannot satisfy a request."""
+
+
+class CodexNotFoundError(AppServerError):
+    """No executable was found in the user's selected installation scope."""
 
 
 @dataclass
@@ -34,6 +35,7 @@ class AppServerClient:
         on_message: Callable[[dict[str, Any]], None] | None = None,
         config_overrides: list[str] | None = None,
     ) -> None:
+        self._explicit_codex_cli = codex_cli is not None
         self.codex_cli = codex_cli or codex_executable()
         self._start_lock = threading.RLock()
         self.request_timeout_seconds = request_timeout_seconds
@@ -59,10 +61,10 @@ class AppServerClient:
     def _start(self) -> None:
         if self.running:
             return
-        if not self.codex_cli.is_file():
+        if not self._explicit_codex_cli:
             self.codex_cli = codex_executable()
         if not self.codex_cli.is_file():
-            raise AppServerError("请先安装并登录 Codex；可通过 MONKEX_CODEX_PATH 指定 Codex 可执行文件")
+            raise CodexNotFoundError("请先安装并登录 Codex；可通过 MONKEX_CODEX_PATH 指定 Codex 可执行文件")
         self._closed.clear()
         command = [str(self.codex_cli), "app-server", "--listen", "stdio://"]
         for override in self.config_overrides:
@@ -89,21 +91,24 @@ class AppServerClient:
         )
         self._reader.start()
         self._stderr_reader.start()
-        response = self.request(
-            "initialize",
-            {
-                "clientInfo": {
-                    "name": "zinx-work-twin-shell",
-                    "title": "Monkex",
-                    "version": "0.1.2",
+        try:
+            response = self.request(
+                "initialize",
+                {
+                    "clientInfo": {
+                        "name": "zinx-work-twin-shell",
+                        "title": "Monkex",
+                        "version": "0.1.2",
+                    },
+                    "capabilities": {"experimentalApi": True},
                 },
-                "capabilities": {"experimentalApi": True},
-            },
-        )
-        if response.get("error") is not None:
+            )
+            if response.get("error") is not None:
+                raise AppServerError("Codex App Server 初始化失败")
+            self.notify("initialized", {})
+        except Exception:
             self.close()
-            raise AppServerError("Codex App Server 初始化失败")
-        self.notify("initialized", {})
+            raise
 
     def close(self) -> None:
         self._closed.set()

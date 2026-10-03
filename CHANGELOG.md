@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — 2026-10-02
+
+- Discover the embedded Codex CLI in the current macOS ChatGPT/Codex application bundle, including user-level installations. Finder launches connect automatically with both the current nested CLI layout and the legacy resource path.
+- Resolve macOS apps through LaunchServices before standard-install fallbacks. Renamed/moved apps and new resource layouts use bounded executable discovery; the default registered app takes priority over backups. Explicit paths retain their existing authority.
+- Rediscover the CLI on every app-server reconnect and coin refresh, including updates that leave the old binary on disk. Failed initialization closes the incomplete session so the normal retry can recover.
+- Distinguish a missing executable from a failed connection: temporary or protocol failures show reconnect/retry guidance and retain the last observed task snapshot.
+- Run discovery and reconnect regressions on both packaging platforms. Add a read-only `scripts/check_codex_compatibility.py` probe for initialization, task listing and quota support after Codex updates; it emits status only.
+
 ## Unreleased — 2026-09-12
 
 - Track hover against the native window's physical bounds while other apps are focused. A short hover dwell preserves press-to-drag; pointer exit/reentry, manual collapse and pin behavior have focused regression coverage. Browser previews retain DOM tracking.

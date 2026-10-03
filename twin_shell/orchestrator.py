@@ -14,7 +14,7 @@ import time
 from typing import Any
 
 
-from .app_server import AppServerClient, AppServerError
+from .app_server import AppServerClient, AppServerError, CodexNotFoundError
 from .read_receipts import CodexReadReceipts
 from .activity import ActivityFeed
 from .runtime_observer import LocalRuntimeObserver
@@ -362,10 +362,12 @@ class WorkTwinShell:
                     self._feed_snapshot = result
                     self._feed_at = time.time()
                 self.events.publish({"type": "feed_updated", "at": _utc_now()})
-            except Exception:
+            except Exception as error:
                 with self._feed_lock:
-                    self._feed_snapshot["error"] = ("任务同步暂时中断，保留上次观测结果" if self.client.running
-                        else "请安装并登录 Codex；找不到程序时设置 MONKEX_CODEX_PATH 后重启 Monkex")
+                    if isinstance(error, CodexNotFoundError):
+                        self._feed_snapshot["error"] = "请安装并登录 Codex；找不到程序时设置 MONKEX_CODEX_PATH 后重启 Monkex"
+                    else:
+                        self._feed_snapshot["error"] = "Codex 连接暂时中断，正在重试；可点击金币重新连接"
                     self._feed_snapshot["loading"] = False
             self._stop_event.wait(8)
 

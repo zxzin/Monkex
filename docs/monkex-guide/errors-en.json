@@ -1,5 +1,5 @@
 {
- "任务同步暂时中断，保留上次观测结果":"Task sync interrupted. Keeping the last observation.",
+ "Codex 连接暂时中断，正在重试；可点击金币重新连接":"Codex connection interrupted. Retrying; click the coin to reconnect.",
  "请安装并登录 Codex；找不到程序时设置 MONKEX_CODEX_PATH 后重启 Monkex":"Install and sign in to Codex. If it cannot be found, set MONKEX_CODEX_PATH and restart Monkex.",
  "请先安装并登录 Codex；可通过 MONKEX_CODEX_PATH 指定 Codex 可执行文件":"Install and sign in to Codex. Use MONKEX_CODEX_PATH for a nonstandard executable location.",
  "本机工作分身服务发生内部错误":"The local Monkex service encountered an internal error.",
