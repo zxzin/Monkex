@@ -6,7 +6,7 @@ const css=fs.readFileSync(path.join(__dirname,'../shell/styles.css'),'utf8');
 for(const [name,hex] of Object.entries({ink:'171512',white:'ffffff',paper:'f7faff',red:'e7372f',yellow:'ffd33d',blue:'2477ff',green:'16b35c'})){
   assert.match(css,new RegExp(`--zinx-${name}:#${hex}`));
 }
-assert.match(css,/\.weekly-quota\[data-state=low\]\{background:var\(--red-soft\)/);
+assert.match(css,/\.weekly-quota\[data-state=low\] strong\{color:var\(--red-ink\)/,'low quota uses red numerals on the compact transparent header');
 assert.ok(css.includes('.pin-button[aria-pressed=true] .pin-head{fill:var(--yellow)}'));
 assert.match(css,/\.task-button\[data-status=unread\] \.row-status\{color:var\(--yellow-ink\)/);
 assert.match(css,/\.task-button\[data-status=running\] \.row-status\{color:var\(--green-ink\)/);

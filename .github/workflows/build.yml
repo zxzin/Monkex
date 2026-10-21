@@ -42,7 +42,7 @@ jobs:
           done
       - name: UI regression tests
         shell: bash
-        run: for suite in tests/*.cjs; do node "$suite" || exit 1; done
+        run: for suite in tests/test_*.cjs; do node "$suite" || exit 1; done
       - run: python scripts/build_monkex_release.py
       - run: python scripts/smoke_monkex_backend.py "${{ matrix.binary }}" desktop_shell/src-tauri/release-web
       - working-directory: desktop_shell

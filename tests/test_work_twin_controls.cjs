@@ -43,7 +43,7 @@ assert.match(html,/id="pinButton"[^>]*aria-pressed="false"[^>]*><svg/);
 for(const removed of ['boardSettings','playFeedbackToggle','setSettings'])assert.ok(!(html+source).includes(removed),'remove obsolete settings '+removed);
 assert.match(html,/<div id="greetMonkey"/,'avatar is a display and weekly counter without an empty menu');
 const elements=new Map(),styles={},timers=new Map(),modes=[],writes=[],calls=[];let timerId=0;
-const $=id=>{if(!elements.has(id))elements.set(id,{hidden:true,value:'',offsetHeight:112,focus(){this.focused=true;},setAttribute(k,v){this[k]=v;}});return elements.get(id);};
+const $=id=>{if(!elements.has(id))elements.set(id,{hidden:true,value:'',offsetHeight:id==='systemBanner'?112:id==='quotaDetails'?80:0,focus(){this.focused=true;},setAttribute(k,v){this[k]=v;}});return elements.get(id);};
 const state={mode:'compact',petMode:true,pinned:false,boardSize:0,selectionRevision:0,autoCollapseTimer:null,hoverCollapseTimer:null,pointerInside:false,navigation:{pending:null,navigate:async()=>true}};
 const ctx={state,$,clearTimeout:id=>timers.delete(id),setTimeout:(fn,ms)=>{timers.set(++timerId,{fn,ms});return timerId;},
   document:{documentElement:{style:{setProperty:(k,v)=>styles[k]=v}}},localStorage:{setItem:(...args)=>writes.push(args)},
@@ -55,8 +55,11 @@ vm.runInContext(source.slice(source.indexOf('function boardHeight('),source.inde
   assert.equal(ctx.boardHeight(0),180);assert.equal(ctx.boardHeight(3),230);
   assert.equal(ctx.boardHeight(7),414);assert.equal(ctx.boardHeight(100),420);
   assert.equal(ctx.boardHeight(3,112),342);
-  ctx.syncBoardSize();assert.equal(styles['--board-height'],'248px');
-  assert.equal(calls[0].args.height,248);assert.equal(calls[0].args.activate,true);ctx.syncBoardSize();assert.equal(calls.length,1,'unchanged size has no native IPC');
+  ctx.syncBoardSize();assert.equal(styles['--board-height'],'328px','visible quota detail panel contributes its measured height');
+  assert.equal(calls[0].args.height,328);assert.equal(calls[0].args.activate,true);ctx.syncBoardSize();assert.equal(calls.length,1,'unchanged size has no native IPC');
+  $('quotaDetails').offsetHeight=170;ctx.syncBoardSize();assert.equal(styles['--board-height'],'418px','opening card expiries expands the board');
+  $('systemBanner').hidden=false;ctx.syncBoardSize();assert.equal(styles['--board-height'],'420px','quota details and error banner retain native maximum height');
+  $('systemBanner').hidden=true;$('quotaDetails').offsetHeight=80;ctx.syncBoardSize();assert.equal(styles['--board-height'],'328px','closing details restores compact sizing');
   state.mode='collapsed';ctx.expandFromHover();assert.equal(state.mode,'compact','hover opens the collapsed tree');assert.equal(state.pointerInside,true);
   ctx.scheduleHoverCollapse();assert.equal(timers.size,1);let hover=[...timers][0];assert.equal(hover[1].ms,300);timers.delete(hover[0]);hover[1].fn();assert.equal(state.mode,'collapsed','leaving the surface collapses after a short grace period');
   state.mode='compact';ctx.scheduleHoverCollapse();assert.equal(timers.size,1);ctx.expandFromHover();assert.equal(timers.size,0,'returning before the grace period keeps the board open');

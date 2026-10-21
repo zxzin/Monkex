@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — 2026-10-21
+
+- Integrate quota into the compact toolbar with an 18px banana coin. Reset times start collapsed and toggle independently from coin refresh; background sync preserves disclosure state. Keep balance, nearest expiry and reset-card count in one quiet summary, with the expiry placed left of the count and full expiry details in a bounded three-column disclosure.
+- Add a compact quota-details area to the expanded board: credit balance, available reset-card count, grouped expiration dates, and local reset dates for weekly and available five-hour windows.
+- Preserve the simple collapsed tree and the banana coin's full account refresh. Display-only quota details add no purchase or reset-redemption action.
+- Parse only the core Codex quota bucket. Preserve true zero values, distinguish missing data from unlimited credits and explicit non-expiring cards, and keep authoritative card counts when the detail list is capped or absent.
+- Keep recent observations for up to 90 seconds during transport failures, label pending refreshes, and clear account-derived details on manual refresh or authoritative missing fields. Account IDs and reset-card IDs stay out of the display payload.
+- Include Chinese and English labels and regression coverage for quota parsing, freshness, account refresh and compact layouts. This is a source update; public installer availability remains defined by each Release.
+- Run standalone UI regression suites in CI; browser-dependent visual QA remains an explicit local check.
+
 ## Unreleased — 2026-10-02
 
 - Discover the embedded Codex CLI in the current macOS ChatGPT/Codex application bundle, including user-level installations. Finder launches connect automatically with both the current nested CLI layout and the legacy resource path.

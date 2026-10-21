@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const state = {
-  threads: [], selectedThreadId: null, openingId: null, filter: "board", observedAt: null, weeklyUsage: null,
+  threads: [], selectedThreadId: null, openingId: null, filter: "board", observedAt: null, weeklyUsage: null, usageDetails: null,
   petMode: params.get("pet") === "1", petExpanded: false,
   mode: "compact", pinned: localStorage.getItem("twin-pinned") === "true",
   connected: false, refreshing: false, listBusy: false, queuedRender: false,
@@ -204,6 +204,7 @@ function updateCounts() {
   $("petQuotaRemaining").textContent=quota.label;
   $("petQuota").dataset.state=quota.state;
   $("petQuota").title=$("weeklyQuota").title;
+  renderQuotaDetails();
   const groups=boardSets();
   renderQuotaFlow($("weeklyQuota"),groups.board,quota);
   const running=groups.board.filter(t=>state.connected&&t.status==="running").length;
@@ -228,6 +229,83 @@ function weeklyQuotaState(usage,now=Date.now()/1000) {
   if(!valid)return {label:"—",state:"unknown"};
   const remaining=Math.max(0,Math.min(100,usage.remaining_percent));
   return {label:String(Math.round(remaining*10)/10)+"%",state:remaining<=20?"low":remaining<=50?"medium":"normal",remaining};
+}
+function quotaDetailsState(details,now=Date.now()/1000) {
+  const fresh=Number.isFinite(details?.observed_at)&&now-details.observed_at<=90&&now-details.observed_at>=-30;
+  if(!fresh)return {fresh:false,pending:true,balance:null,cards:null,windows:[]};
+  return {fresh:true,pending:details.refresh_pending===true,
+    balance:details.credit_balance?.available===true?details.credit_balance:null,
+    cards:details.reset_cards?.available===true?details.reset_cards:null,
+    windows:Array.isArray(details.windows)?details.windows.filter(item=>[300,10080].includes(item.window_minutes)):[]};
+}
+function formatQuotaBalance(value) {
+  if(typeof value!=="string"||!/^\d+(?:\.\d+)?$/.test(value)||!Number.isFinite(Number(value)))return null;
+  return Number(value).toLocaleString("zh-CN",{maximumFractionDigits:2});
+}
+function quotaLocalTime(timestamp,full=false) {
+  if(!Number.isFinite(timestamp)||timestamp<=0)return "待同步";
+  return new Date(timestamp*1000).toLocaleString("zh-CN",full?{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}:{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+}
+function quotaCountdown(timestamp,now=Date.now()/1000) {
+  if(!Number.isFinite(timestamp)||timestamp<=0)return "";
+  const minutes=Math.ceil((timestamp-now)/60);
+  if(minutes<=0)return "等待重置同步";
+  if(minutes<60)return minutes+" 分钟后";
+  if(minutes<1440)return Math.ceil(minutes/60)+" 小时后";
+  return Math.floor(minutes/1440)+" 天 "+Math.floor(minutes%1440/60)+" 小时后";
+}
+function setQuotaResetExpanded(expanded) {
+  $("quotaResetWindows").hidden=!expanded;
+  $("quotaResetToggle").setAttribute("aria-expanded",String(expanded));
+  $("quotaResetToggle").title=expanded?"收起额度重置时间":"展开额度重置时间";
+  syncBoardSize(false,false);
+}
+function renderQuotaDetails(now=Date.now()/1000) {
+  const panel=document.getElementById?.("quotaDetails");
+  if(!panel)return;
+  const usage=quotaDetailsState(state.usageDetails,now);
+  panel.dataset.state=usage.fresh?usage.pending?"pending":"current":"unknown";
+  const value=usage.balance?.unlimited?"不限额":formatQuotaBalance(usage.balance?.balance);
+  $("creditBalanceValue").textContent=value??"—";
+  $("creditBalanceValue").title=value===null?"额度余额待同步":usage.balance?.unlimited?"不限额":"额度余额："+usage.balance.balance;
+  $("creditBalanceHint").textContent=value===null?"待同步":"Codex 当前余额";
+  const cards=usage.cards;
+  const count=Number.isInteger(cards?.available_count)&&cards.available_count>=0?cards.available_count:null;
+  $("resetCardCount").textContent=count===null?"—":String(count);
+  const expirations=count===null?[]:(Array.isArray(cards.expirations)?cards.expirations:[]).filter(item=>Number.isInteger(item.count)&&item.count>0&&(item.expires_at===null||(Number.isFinite(item.expires_at)&&item.expires_at>0))).sort((a,b)=>(a.expires_at??Infinity)-(b.expires_at??Infinity));
+  const unlisted=Number.isInteger(cards?.unlisted_count)&&cards.unlisted_count>0?cards.unlisted_count:0;
+  const nearest=expirations.find(item=>item.expires_at!==null);
+  const expiryHint=count===null?"待同步":count===0?"暂无可用重置卡":nearest?"到期 "+quotaLocalTime(nearest.expires_at):unlisted||!expirations.length?"有效期待同步":"无到期时间";
+  $("resetCardNextExpiry").textContent=expiryHint;
+  $("resetCardNextExpiry").title=nearest?"最近到期 "+quotaLocalTime(nearest.expires_at,true):expiryHint;
+  const list=$("resetCardExpirations");
+  list.replaceChildren();
+  const appendExpiry=(amount,label,title=label)=>{
+    const item=document.createElement("li"),number=document.createElement("span"),date=document.createElement("span");
+    number.textContent=amount===null?"—":"×"+amount;date.textContent=label;date.title=title;
+    item.append(number,date);list.append(item);
+  };
+  for(const item of expirations)appendExpiry(item.count,item.expires_at===null?"无到期时间":quotaLocalTime(item.expires_at),item.expires_at===null?"无到期时间":quotaLocalTime(item.expires_at,true));
+  if(unlisted)appendExpiry(unlisted,"有效期待同步");
+  if(!list.children.length)appendExpiry(count,count===0?"暂无可用重置卡":"有效期待同步");
+  const windows=$("quotaResetWindows");windows.replaceChildren();
+  const ordered=[10080,300].map(minutes=>usage.windows.find(item=>item.window_minutes===minutes)).filter(Boolean);
+  if(!ordered.length)ordered.push({window_minutes:10080,resets_at:null});
+  for(const item of ordered){
+    const row=document.createElement("p"),label=document.createElement("span"),text=document.createElement("span");
+    label.textContent=item.window_minutes===10080?"周额度重置":"5 小时额度重置";
+    const timestamp=item.resets_at;
+    if(Number.isFinite(timestamp)&&timestamp>0){
+      const time=document.createElement("time");time.dateTime=new Date(timestamp*1000).toISOString();
+      time.textContent=quotaLocalTime(timestamp);time.title=quotaLocalTime(timestamp,true);
+      text.append(time,document.createTextNode(" · "+quotaCountdown(timestamp,now)));
+    }else text.textContent="待同步";
+    row.append(label,text);windows.append(row);
+  }
+  const status=$("quotaDetailsStatus");
+  status.hidden=!usage.fresh||!usage.pending;
+  status.textContent=usage.pending?"上次同步 "+quotaLocalTime(state.usageDetails?.observed_at)+" · 正在重试同步":"";
+  syncBoardSize();
 }
 function renderQuotaFlow(element,cards,quota) {
   // A slow, fixed-speed turn signals observed activity while preserving the banana face.
@@ -330,7 +408,7 @@ async function refresh(force=false) {
   state.refreshPromise=(async()=>{
   try{
     if(force){
-      state.threads=[];state.weeklyUsage=null;state.observedAt=null;state.connected=false;
+      state.threads=[];state.weeklyUsage=null;state.usageDetails=null;state.observedAt=null;state.connected=false;
       $("connectionText").textContent="正在重新连接 Codex…";banner("");renderList(true);updateCounts();
     }
     const data=await api(force?"/api/refresh":"/api/threads",force?{}:undefined);
@@ -340,6 +418,7 @@ async function refresh(force=false) {
     $("connectionText").textContent=data.loading?"正在整理任务":state.connected?(data.coverage?.external_runtime==="local_events"?"Codex 已连接 · 正在同步运行状态":"Codex 已连接 · 部分状态待确认"):"同步中断 · 保留上次状态";
     state.observedAt=data.observed_at;
     state.weeklyUsage=data.health?.usage?.weekly||null;
+    state.usageDetails=data.health?.usage?.details||null;
     if(data.error)banner(data.error);
     if(!data.loading) renderList(force);
     updateCounts();
@@ -354,7 +433,7 @@ function boardHeight(count,extra=0,groupCount=0) {
 }
 function syncBoardSize(force=false,activate=true) {
   if(state.mode!=="compact")return;
-  const extra=$("systemBanner").hidden?0:$("systemBanner").offsetHeight;
+  const extra=($("systemBanner").hidden?0:$("systemBanner").offsetHeight)+(Number($("quotaDetails")?.offsetHeight)||0);
   const cards=filtered();
   const height=boardHeight(cards.length,extra,projectGroups(cards).length);
   if(!force&&height===state.boardSize)return;
@@ -497,6 +576,8 @@ function bindPetDrag() {
 function bind() {
   window.addEventListener("work-twin-window-focus",onWindowFocus);
   $("quotaCoinButton").onclick=refreshFromCoin;
+  $("quotaResetToggle").onclick=()=>setQuotaResetExpanded($("quotaResetWindows").hidden);
+  $("resetCardDetails").ontoggle=()=>syncBoardSize();
   if(window.WorkTwinReadPlay)state.readPlay=new window.WorkTwinReadPlay({
     getContext:()=>({connected:state.connected,mode:state.mode,filter:state.filter,unreadRemaining:boardSets().recent.filter(t=>displayStatus(t)==="unread").length}),
     celebrate:()=>playPetInteraction(["hello","nod","idle"],180),

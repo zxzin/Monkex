@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import json
 import hashlib
+import math
 import os
 from pathlib import Path
 import queue
@@ -18,7 +19,7 @@ from .app_server import AppServerClient, AppServerError, CodexNotFoundError
 from .read_receipts import CodexReadReceipts
 from .activity import ActivityFeed
 from .runtime_observer import LocalRuntimeObserver
-from .weekly_quota import weekly_quota, primary_usage
+from .weekly_quota import weekly_quota, primary_usage, quota_details
 from .platform_support import data_directory, open_codex_thread
 
 
@@ -599,8 +600,17 @@ class WorkTwinShell:
                      and -30 <= now - observed <= 90 and (reset is None or reset > now))
             weekly = previous if fresh else {"available": False, "remaining_percent": None}
             weekly["refresh_pending"] = True
+            previous_details = deepcopy((self._usage_snapshot or {}).get("details") or {})
+            details_observed = previous_details.get("observed_at")
+            details_fresh = (type(details_observed) in (int, float) and math.isfinite(details_observed)
+                             and -30 <= now - details_observed <= 90)
+            details = previous_details if details_fresh else quota_details(None, now=now)
+            details["refresh_pending"] = True
+            # A cached window ceases to describe the current quota once its reset passes.
+            details["windows"] = [window for window in details.get("windows", [])
+                                  if window.get("resets_at") is None or window["resets_at"] > now]
             usage = {"used_percent": None, "available": False, "weekly": weekly,
-                     "refresh_pending": True, "error_kind": type(error).__name__}
+                     "details": details, "refresh_pending": True, "error_kind": type(error).__name__}
         else:
             try:
                 usage = primary_usage(response)
@@ -608,6 +618,7 @@ class WorkTwinShell:
                 usage = {"used_percent": None, "available": False}
             # Successful responses are authoritative, including a missing window.
             usage["weekly"] = weekly_quota(response)
+            usage["details"] = quota_details(response)
         self._usage_snapshot = usage
         return deepcopy(self._usage_snapshot)
 

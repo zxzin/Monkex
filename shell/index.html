@@ -26,11 +26,29 @@
     <header class="topbar">
       <div id="greetMonkey" class="brand-pet" title="本周收蕉"><span id="brandMonkey" class="monkey-art" data-frame="idle" aria-hidden="true"><img src="/shell/assets/monkey-banana-2026-09-07/gold-chain-monkey.png" alt=""></span></div>
       <div class="heading" id="dragArea"><h1><span id="viewHeading" title="Monkex · Codex 进度看板">Monkex</span><i id="connectionDot" class="connection-dot" title="正在连接" aria-label="正在连接"></i></h1><span id="connectionText" class="sr-only">正在连接 Codex</span></div>
-      <span id="weeklyQuota" class="weekly-quota" title="周订阅额度待同步"><span>周剩余</span><strong id="weeklyRemaining">—</strong><button id="quotaCoinButton" class="quota-coin-button" type="button" aria-label="刷新任务与额度" title="点击刷新任务与额度"><img class="quota-coin" src="/shell/assets/monkex-coins-2026-09-07/banana-coin-v1.png" alt="" aria-hidden="true"></button></span>
+      <span id="weeklyQuota" class="weekly-quota" title="周订阅额度待同步"><button id="quotaResetToggle" class="quota-reset-toggle" type="button" aria-expanded="false" aria-controls="quotaResetWindows" title="展开额度重置时间"><span>周剩余</span><strong id="weeklyRemaining">—</strong></button><button id="quotaCoinButton" class="quota-coin-button" type="button" aria-label="刷新任务与额度" title="点击刷新任务与额度"><img class="quota-coin" src="/shell/assets/monkex-coins-2026-09-07/banana-coin-v1.png" alt="" aria-hidden="true"></button></span>
       <button id="pinButton" class="pin-button" type="button" aria-pressed="false" aria-label="钉住看板" title="钉住看板"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="pin-shadow" d="M5 21h14" /><g class="pin-art"><path class="pin-needle" d="M12 14v7"/><path class="pin-head" d="M8 3h8v3l-1 1v4l3 3v2H6v-2l3-3V7L8 6z"/><path class="pin-glint" d="M10 5h3"/></g></svg></button>
       <button id="collapseButton" class="icon-button" type="button" aria-label="收成香蕉树" title="收成香蕉树"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg></button>
     </header>
     <div id="systemBanner" class="system-banner" role="status" hidden></div>
+    <section id="quotaDetails" class="quota-details" aria-label="额度详情" data-state="unknown">
+      <div id="quotaResetWindows" class="quota-reset-windows" role="region" aria-label="额度重置时间" hidden><p><span>周额度重置</span><span>待同步</span></p></div>
+      <details id="resetCardDetails" class="reset-card-details">
+        <summary class="quota-summary" title="展开重置卡有效期">
+          <span class="credit-balance">
+            <span class="quota-detail-label">余额</span>
+            <strong id="creditBalanceValue" class="quota-detail-value">—</strong>
+            <span id="creditBalanceHint" class="sr-only">待同步</span>
+          </span>
+          <span class="reset-card-overview">
+            <span id="resetCardNextExpiry" class="reset-card-next-expiry">待同步</span>
+            <span class="reset-card-heading"><span class="quota-detail-label">重置卡</span><strong id="resetCardCount" class="quota-detail-value">—</strong><i aria-hidden="true"></i></span>
+          </span>
+        </summary>
+        <ul id="resetCardExpirations" class="reset-card-expirations" aria-label="重置卡有效期"></ul>
+      </details>
+      <span id="quotaDetailsStatus" class="quota-details-status" hidden></span>
+    </section>
     <section id="feedView" class="feed-view" aria-label="跨项目任务动态">
       <nav class="filters" aria-label="任务筛选">
         <button data-filter="board" class="filter active" aria-pressed="true" title="近24小时未读在前，全部进行中在后">看板 <span id="boardCount">0</span></button>

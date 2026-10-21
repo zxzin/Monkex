@@ -36,7 +36,7 @@ fs.mkdirSync(out,{recursive:true});
  assert.ok(gap>=0,'quota and pin do not overlap');
  await page.locator('#appShell').screenshot({path:path.join(out,'english-board.png')});
  await page.locator('#quotaCoinButton').click();assert.ok(refreshes>0);
- snapshot.error='任务同步暂时中断，保留上次观测结果';await page.locator('#quotaCoinButton').click();await page.locator('#systemBanner').getByText('Task sync interrupted. Keeping the last observation.').waitFor();delete snapshot.error;
+ snapshot.error='Codex 连接暂时中断，正在重试；可点击金币重新连接';await page.locator('#quotaCoinButton').click();await page.locator('#systemBanner').getByText('Codex connection interrupted. Retrying; click the coin to reconnect.').waitFor();delete snapshot.error;
  await page.locator('#quotaCoinButton').click();
  await page.locator('[data-filter=recent]').click();assert.equal(await page.locator('.task-button').count(),4);assert.match(await page.locator('#taskList').innerText(),/Read/);
  snapshot.threads[0].name='保留原始任务标题';
