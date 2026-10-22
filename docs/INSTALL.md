@@ -1,5 +1,7 @@
 # 安装与故障排查
 
+> **版本提示（2026-10-22 核验）：** 最新公开包为 [v0.1.2 Preview](https://github.com/zxzin/Monkex/releases/tag/v0.1.2)，发布于 2026-09-09。英文界面、项目分组、悬停展开、近期 Codex 程序发现与重连修复、额度余额和重置卡详情均在之后的 `main` 源码中。本页对这些功能的说明适用于包含相应更新的构建；旧安装包可能无法连接更新后的 Codex。请先核对版本，再按需选择源码构建或等待新版公开包。
+
 ## 开始前
 
 安装并登录自己的 Codex 桌面应用。Monkex 不捆绑 Codex，不提供账号或额外额度。从 [公开 Releases](https://github.com/zxzin/Monkex/releases)选择匹配系统和架构的附件，阅读 Preview 限制，核对 SHA256SUMS.txt。
