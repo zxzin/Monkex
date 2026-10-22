@@ -6,24 +6,19 @@ Keep running tasks, unread results and quota in view—right on your desktop.
 
 Monkex is a small, independent companion for an existing **Codex desktop** installation. Your conversations and work stay in Codex; the tree gives you a place to glance, collect a finished result and jump back in.
 
-## Before you download
-
-| | What you get |
-| --- | --- |
-| **Public installer: [v0.1.2 Preview](https://github.com/zxzin/Monkex/releases/tag/v0.1.2)** · September 9, 2026 | The earlier Chinese-language desktop app with task status, banana collection and weekly quota. Check compatibility with your installed Codex before proceeding. |
-| **Current `main` source** | English UI, project grouping, hover-to-open, newer Codex discovery/reconnect fixes, and the quota details shown below. These changes are **not included in the v0.1.2 installer**. |
-
-The latest public installer remains v0.1.2 Preview, verified October 22, 2026. The October 21 update is available as source; a new installer has not been released. See the [changelog](CHANGELOG.md) for the boundary between releases and source changes, or [build the current source](#build-current-source).
-
-The app's version field can still say `0.1.2` in a newer source build. Use the **Release tag or source commit** to identify its feature set.
+> **Version note:** The gallery shows current `main` source. The public **v0.1.2 Preview** installer predates English UI, grouping, hover-to-open, recent Codex compatibility fixes and quota details. [Compare versions before installing](#download-and-install). Verified October 22, 2026.
 
 ## A small tree, a useful glance
 
-<img src="docs/media/monkex-quota-demo.en.gif" width="420" alt="Monkex current-source demo: a banana tree beside a task board, with weekly reset times, credit balance and reset-card expirations expanding below the toolbar.">
+<img src="docs/media/monkex-showcase-hero.en.jpg" width="960" alt="Monkex desktop tree beside its task board, showing running and completed tasks grouped by project and the weekly quota.">
 
-*Demo data · Current source preview, October 21, 2026. All account values and tasks are synthetic. [Static image](docs/media/monkex-quota-demo.en.png).*
+*Actual interface · Current source · All tasks and account values are synthetic.*
 
-When several Codex conversations are running, check which ones need attention without opening each conversation. When a result is ready, click its card to return to the original task. The current source groups conversations from the same local project and places unread results first.
+When several Codex conversations are running, check which ones need attention without opening each conversation. When a result is ready, click its card to return to the original task.
+
+### Three states at a glance
+
+<img src="docs/media/monkex-showcase-states.en.jpg" width="960" alt="Running tasks have green cards and moving dashed lines, completed unread tasks are yellow, and read results have a banana peel.">
 
 | Task state | On the board |
 | --- | --- |
@@ -39,7 +34,17 @@ When several Codex conversations are running, check which ones need attention wi
 - **Use Board, 24 hours or 7 days** to find recent work. Project colors identify related conversations; green and yellow distinguish task states.
 - **Right-click the tree to quit.** The running app stays out of the macOS Dock and Windows taskbar. Collection motion respects the system's reduced-motion setting.
 
+## Related tasks, together
+
+<img src="docs/media/monkex-showcase-projects.en.jpg" width="960" alt="Two local project groups, Launch Studio and Monkex Lab, each with a consistent color marker and both running and completed conversations.">
+
+Conversations from the same local project stay together. Unread results take priority within each group. The small color marker identifies the project; green and yellow cards continue to identify task state.
+
 ## Quota, without a dashboard taking over
+
+<img src="docs/media/monkex-quota-focus.en.gif" width="860" alt="A tightly framed quota demo cycles through the compact summary, weekly and five-hour reset times, and reset-card expiration details.">
+
+*6-second loop · Synthetic demo data · Quota area only · [Expanded still](docs/media/monkex-showcase-quota.en.jpg).*
 
 The current source keeps these details in the compact toolbar:
 
@@ -52,7 +57,22 @@ Dates use your computer's local time zone. Missing fields remain unknown; genuin
 
 Monkex displays the values Codex provides. It does not calculate remaining tokens, and one coin has no fixed token or monetary value. **Purchasing credits and redeeming reset cards stay in Codex.**
 
+## Finished work stays within reach
+
+<img src="docs/media/monkex-showcase-history.en.jpg" width="960" alt="Side-by-side 24 hours and 7 days examples, with banana peels marking read results and older tasks still accessible.">
+
+**24 hours** includes recent read results. **7 days** shows tasks whose last activity was more than 24 hours and no more than seven days ago. The two views use the same synthetic task set. Click a result to return to its original conversation.
+
 ## Download and install
+
+| | What you get |
+| --- | --- |
+| **Public installer: [v0.1.2 Preview](https://github.com/zxzin/Monkex/releases/tag/v0.1.2)** · September 9, 2026 | The earlier Chinese-language desktop app with task status, banana collection and weekly quota. Check compatibility with your installed Codex before proceeding. |
+| **Current `main` source** | English UI, project grouping, hover-to-open, newer Codex discovery/reconnect fixes, and the quota details shown above. These changes are **not included in the v0.1.2 installer**. |
+
+The latest public installer remains v0.1.2 Preview, verified October 22, 2026. The October 21 update is available as source; a new installer has not been released. See the [changelog](CHANGELOG.md) for the boundary between releases and source changes, or [build the current source](#build-current-source).
+
+The app's version field can still say `0.1.2` in a newer source build. Use the **Release tag or source commit** to identify its feature set.
 
 Install and sign in to Codex first. Then review the [v0.1.2 Preview release notes](https://github.com/zxzin/Monkex/releases/tag/v0.1.2) and select your package:
 
