@@ -65,6 +65,8 @@ Monkex displays the values Codex provides. It does not calculate remaining token
 
 ## Download and install
 
+Current source also includes **Codex Health**, a compact pixel heart left of the weekly quota. Its persistent Link reading shows public-connection quality out of 100; a separate dot flags waiting, quiet tasks, pending sync or a recent explicit error. Its anchored popover shows actual task evidence, connection samples and official notices; a high public score preserves task warnings. Reset the test after changing VPN nodes, or use the same flow on a direct connection. Cards show fresh reported Token usage or a phase such as Tool call / Awaiting response. Previously running cards stay visible as Pending sync during transient observation failures. [How monitoring works](docs/RUNTIME_HEALTH.md) · [Score formula](docs/HEALTH_SCORE.md)
+
 | | What you get |
 | --- | --- |
 | **Public installer: [v0.1.2 Preview](https://github.com/zxzin/Monkex/releases/tag/v0.1.2)** · September 9, 2026 | The earlier Chinese-language desktop app with task status, banana collection and weekly quota. Check compatibility with your installed Codex before proceeding. |
@@ -155,7 +157,7 @@ Open a [GitHub issue](https://github.com/zxzin/Monkex/issues) with your Monkex v
 
 ## Privacy and rights
 
-The backend listens only on `127.0.0.1:8766`. It reads the current user's local Codex task metadata, recent context and runtime records, and keeps Monkex read receipts in the system app-data directory. Released packages contain no maker task history, training data or credentials. Monkex has no analytics or remote-upload service; Codex manages sign-in.
+The backend listens only on `127.0.0.1:8766`. It reads the current user's local Codex task metadata, recent context and runtime records, and keeps Monkex read receipts in the system app-data directory. Released packages contain no maker task history, training data or credentials. Monkex has no analytics or conversation-upload service; Runtime Health sends credential-free probes to fixed public endpoints and reads official service notices. Task data stays local; Codex manages sign-in. See [Runtime Health](docs/RUNTIME_HEALTH.md) for destinations and interpretation.
 
 Copyright © 2026 Monkex contributors. **Source-available:** no general open-source license is granted. You may download and run released applications for personal use.
 

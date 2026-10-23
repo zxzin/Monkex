@@ -415,7 +415,8 @@ class ActivityTests(unittest.TestCase):
         observer.token_snapshot.return_value = {"ready": False}
         self.shell.runtime_observer = observer
         self.client.turns = [{"id": "turn-a", "status": "interrupted", "items": []}]
-        observer.snapshot.return_value = {"status": "running", "turn_id": "turn-a", "event_at": 10, "revision": "start"}
+        observer.snapshot.return_value = {"status": "running", "turn_id": "turn-a", "event_at": 10,
+            "turn_started_at": 10, "anchored": True, "revision": "start"}
         first = self.shell.feed.collect()["threads"][0]
         self.assertEqual(first["status"], "running")
         self.assertFalse(first["can_send"])
@@ -426,7 +427,110 @@ class ActivityTests(unittest.TestCase):
         self.assertNotEqual(first["context_version"], second["context_version"])
         self.assertFalse(any(m in {"turn/start", "thread/resume"} for m, _ in self.client.calls))
 
-    def test_feed_disconnect_and_staleness_clear_running_status(self):
+    def test_card_runtime_telemetry_is_whitelisted_and_matches_current_turn(self):
+        observer = mock.Mock()
+        observer.token_snapshot.return_value = {"ready": False}
+        observer.snapshot.return_value = {"turn_id": "current", "phase": "tool", "activity_at": 100,
+            "phase_at": 90, "pending_tools": 2, "observation_available": True,
+            "model": "PRIVATE_MODEL", "prompts": "PRIVATE_PROMPTS", "toolargs": "PRIVATE_ARGS"}
+        self.shell.runtime_observer = observer
+        card = {"id": "thread-0", "latest_turn_id": "current"}
+        self.shell.feed.telemetry(card)
+        self.assertEqual(card["runtime"], {"turn_id": "current", "phase": "tool", "activity_at": 100,
+            "phase_at": 90, "pending_tools": 2, "observation_available": True})
+        self.assertNotIn("PRIVATE_", repr(card))
+        card["latest_turn_id"] = "next"
+        self.shell.feed.telemetry(card)
+        self.assertEqual(card["runtime"]["phase"], "unknown")
+        self.assertEqual(card["runtime"]["pending_tools"], 0)
+        self.assertFalse(card["runtime"]["observation_available"])
+        self.assertIsNone(card["runtime"]["turn_id"])
+        observer.snapshot.return_value = {"turn_id": None, "phase": "tool", "pending_tools": 3}
+        card["latest_turn_id"] = None
+        self.shell.feed.telemetry(card)
+        self.assertEqual(card["runtime"]["phase"], "unknown", "two unknown turn IDs do not establish a match")
+
+    def test_running_task_omitted_from_list_is_verified_by_exact_read(self):
+        observer = mock.Mock()
+        observer.error = False
+        observer.token_snapshot.return_value = {"ready": False}
+        observer.snapshot.return_value = {"status": "running", "turn_id": "turn-live", "event_at": 600,
+            "activity_fresh": True, "observation_available": True, "revision": "live"}
+        self.shell.runtime_observer = observer
+        self.client.turns = [{"id": "turn-live", "status": "inProgress", "startedAt": 600, "items": []}]
+        self.assertEqual(self.shell.feed.collect()["threads"][0]["status"], "running")
+        original = self.client.request
+        def omitted_request(method, params=None, **kwargs):
+            if method == "thread/list":
+                return {"result": {"data": [], "nextCursor": None}}
+            return original(method, params, **kwargs)
+        self.client.request = omitted_request
+        feed = self.shell.feed.collect()
+        self.assertEqual([(row["id"], row["status"]) for row in feed["threads"]], [("thread-0", "running")])
+        observer.refresh.assert_called_with(["thread-0"])
+        self.assertIn(("thread/read", {"threadId": "thread-0", "includeTurns": False}), self.client.calls)
+
+    def test_missing_running_row_is_not_resurrected_after_confirmed_archive(self):
+        observer = mock.Mock()
+        observer.error = False
+        observer.token_snapshot.return_value = {"ready": False}
+        observer.snapshot.return_value = {"status": "running", "turn_id": "turn-live", "event_at": 600, "revision": "live"}
+        self.shell.runtime_observer = observer
+        self.client.turns = [{"id": "turn-live", "status": "inProgress", "startedAt": 600, "items": []}]
+        self.shell.feed.collect()
+        original = self.client.request
+        def archived_request(method, params=None, **kwargs):
+            if method == "thread/list":
+                return {"result": {"data": [], "nextCursor": None}}
+            result = original(method, params, **kwargs)
+            if method == "thread/read":
+                result["result"]["thread"]["archived"] = True
+            return result
+        self.client.request = archived_request
+        self.assertEqual(self.shell.feed.collect()["threads"], [])
+
+    def test_same_turn_api_terminal_replaces_stale_running_cache(self):
+        observer = mock.Mock()
+        observer.error = False
+        observer.token_snapshot.return_value = {"ready": False}
+        observer.snapshot.return_value = {"status": "running", "turn_id": "turn-live", "event_at": 600, "revision": "live"}
+        self.shell.runtime_observer = observer
+        self.client.turns = [{"id": "turn-live", "status": "inProgress", "startedAt": 600, "items": []}]
+        self.assertEqual(self.shell.feed.collect()["threads"][0]["status"], "running")
+        self.client.turns = [turn("turn-live")]
+        self.client.turns[0].update(startedAt=600, completedAt=650)
+        self.shell.feed.cache.clear()
+        self.assertEqual(self.shell.feed.collect()["threads"][0]["status"], "result_ready")
+
+    def test_temporary_detail_failure_retains_running_then_local_terminal_wins(self):
+        from twin_shell.task_view import result_version
+        observer = mock.Mock()
+        observer.error = False
+        observer.token_snapshot.return_value = {"ready": False}
+        observer.snapshot.return_value = {"status": "running", "turn_id": "turn-live", "event_at": 600, "revision": "live"}
+        self.shell.runtime_observer = observer
+        self.client.turns = [{"id": "turn-live", "status": "inProgress", "startedAt": 600, "items": []}]
+        self.shell.feed.collect()
+        original = self.client.request
+        def unavailable_detail(method, params=None, **kwargs):
+            if method == "thread/turns/list":
+                raise TimeoutError("temporary unavailable")
+            return original(method, params, **kwargs)
+        self.client.request = unavailable_detail
+        observer.snapshot.return_value = {"status": "running", "turn_id": "turn-live", "event_at": 600,
+            "observation_available": False, "revision": "unavailable"}
+        retained = self.shell.feed.collect()["threads"][0]
+        self.assertEqual(retained["status"], "running")
+        self.assertTrue(retained["sync_pending"])
+        self.assertFalse(retained["can_send"] or retained["can_interrupt"])
+        observer.snapshot.return_value = {"status": "completed", "turn_id": "turn-live", "event_at": 650,
+            "result_turn_id": "turn-live", "result_version": result_version("turn-live", "Result"),
+            "result_completed_at": 650, "revision": "completed"}
+        completed = self.shell.feed.collect()["threads"][0]
+        self.assertEqual(completed["status"], "result_ready")
+        self.assertTrue(completed["unread"])
+
+    def test_feed_disconnect_and_staleness_preserve_pending_running_identity(self):
         self.shell._feed_thread = mock.Mock()
         self.shell._feed_snapshot = {"threads": [{"id": "thread-0", "status": "running", "can_interrupt": True}]}
         for online, observed_at in [(False, 99), (True, 1)]:
@@ -435,6 +539,8 @@ class ActivityTests(unittest.TestCase):
             with mock.patch("twin_shell.orchestrator.time.time", return_value=100):
                 card = self.shell.list_threads()["threads"][0]
             self.assertEqual(card["status"], "unknown")
+            self.assertEqual(card["last_observed_status"], "running")
+            self.assertTrue(card["sync_pending"])
             self.assertFalse(card["can_interrupt"])
 
     def test_desktop_window_accepts_first_click(self):

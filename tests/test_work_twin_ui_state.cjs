@@ -45,7 +45,7 @@ for(const status of ['waiting_user','result_ready','completed','failed','interru
 assert.equal(ctx.shortStatus({status:'running',unread:false}),'进行中','reading an active task retains its running state');
 assert.equal(ctx.shortStatus({status:'running',unread:true}),'进行中','current runtime takes precedence over an older unread result');
 state.connected=false;
-assert.equal(ctx.shortStatus({status:'running',unread:true}),'已完成','disconnected runtime is presented as a completed unread result');
+assert.equal(ctx.shortStatus({status:'running',unread:true}),'待同步','a lost connection preserves the last running lifecycle');
 state.connected=true;
 state.threads[0].activity_excerpt='PRIVATE_BODY_SHOULD_ONLY_APPEAR_EXPANDED';
 ctx.renderList(true);
@@ -128,3 +128,17 @@ assert.deepEqual(headings.map(row=>row.children[1].textContent),['Project One','
 assert.equal(headings[0].dataset.projectTone,projectOneRows[0].dataset.projectTone,'project heading and its conversations share color');
 assert.ok(!JSON.stringify(list).includes('/work/project-one'),'full local project path is not exposed in the DOM');
 console.log('PASS: project grouping/colors, hover stability, live priority transitions, badges and navigation');
+
+state.filter='board';state.connected=false;state.listBusy=false;
+state.threads=[{id:'pending',name:'Pending',status:'unknown',last_observed_status:'running',sync_pending:true,unread:false,updated_at:now}];
+ctx.renderList(true);
+assert.equal(taskRows().length,1,'temporarily unconfirmed running card remains on the board');
+assert.equal(taskRows()[0].dataset.status,'pending');
+assert.equal(ctx.shortStatus(state.threads[0]),'待同步');
+state.connected=true;Object.assign(state.threads[0],{status:'running',sync_pending:false});
+ctx.renderList();assert.equal(taskRows()[0].dataset.status,'running','recovery updates the same visible card');
+assert.equal(ctx.taskRunState({status:'running',runtime:{phase:'tool',pending_tools:1,observation_available:true},tokens:{ready:true,tokens_per_min:0}}).label,'工具执行');
+assert.equal(ctx.taskRunState({status:'running',runtime:{phase:'starting',observation_available:true},tokens:{ready:true,tokens_per_min:0}}).label,'等待响应');
+assert.equal(ctx.taskRunState({status:'running',tokens:{ready:true,tokens_per_min:0}}).label,'等待上报');
+assert.equal(ctx.taskRunState({status:'running',runtime:{observation_available:false},tokens:{ready:true,tokens_per_min:0}}).label,'待同步');
+console.log('PASS: pending cards persist and zero reported usage has a runtime explanation.');

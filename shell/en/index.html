@@ -26,6 +26,7 @@
     <header class="topbar">
       <div id="greetMonkey" class="brand-pet" title="This week's harvest"><span id="brandMonkey" class="monkey-art" data-frame="idle" aria-hidden="true"><img src="/shell/assets/monkey-banana-2026-09-07/gold-chain-monkey.png" alt=""></span></div>
       <div class="heading" id="dragArea"><h1><span id="viewHeading" title="Monkex · Codex task board">Monkex</span><i id="connectionDot" class="connection-dot" title="Connecting" aria-label="Connecting"></i></h1><span id="connectionText" class="sr-only">Connecting to Codex</span></div>
+      <button id="runtimeHealthToggle" class="health-badge" type="button" aria-expanded="false" aria-controls="runtimeHealth" aria-label="Public connection · — · Codex health · Unconfirmed" title="Public connection · — · Codex health · Unconfirmed" data-level="unknown" data-score-level="unknown"><svg class="health-heart" viewBox="0 0 12 11" aria-hidden="true"><path d="M1 1h3v1h1v1h2V2h1V1h3v1h1v4h-1v1h-1v1H9v1H8v1H7v1H5v-1H4V9H3V8H2V7H1V6H0V2h1z"/></svg><span class="health-reading"><strong id="healthBadgeValue">—</strong><span class="health-caption">Link</span></span><i id="healthRuntimeAlert" class="health-runtime-alert" data-level="unknown" aria-hidden="true"></i></button>
       <span id="weeklyQuota" class="weekly-quota" title="Waiting for weekly quota"><button id="quotaResetToggle" class="quota-reset-toggle" type="button" aria-expanded="false" aria-controls="quotaResetWindows" title="Show quota reset times"><span>Weekly</span><strong id="weeklyRemaining">—</strong></button><button id="quotaCoinButton" class="quota-coin-button" type="button" aria-label="Refresh tasks and quota" title="Click to refresh tasks and quota"><img class="quota-coin" src="/shell/assets/monkex-coins-2026-09-07/banana-coin-v1.png" alt="" aria-hidden="true"></button></span>
       <button id="pinButton" class="pin-button" type="button" aria-pressed="false" aria-label="Pin board" title="Pin board"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="pin-shadow" d="M5 21h14" /><g class="pin-art"><path class="pin-needle" d="M12 14v7"/><path class="pin-head" d="M8 3h8v3l-1 1v4l3 3v2H6v-2l3-3V7L8 6z"/><path class="pin-glint" d="M10 5h3"/></g></svg></button>
       <button id="collapseButton" class="icon-button" type="button" aria-label="Collapse to tree" title="Collapse to tree"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg></button>
@@ -48,6 +49,27 @@
         <ul id="resetCardExpirations" class="reset-card-expirations" aria-label="Reset expiration dates"></ul>
       </details>
       <span id="quotaDetailsStatus" class="quota-details-status" hidden></span>
+    </section>
+    <section id="runtimeHealth" class="runtime-health" data-level="unknown" aria-label="Codex health" hidden>
+      <div class="health-detail-heading"><span class="health-label">Codex health</span><span id="healthSummary" class="health-summary">Sampling</span><button id="healthCloseButton" type="button" aria-label="Close health details" title="Close health details">×</button></div>
+      <div id="runtimeHealthBody" class="runtime-health-body">
+        <p id="healthOperationalReason" class="health-assessment">Runtime needs confirmation</p>
+        <div class="health-connection-score"><span>Public connection</span><strong id="healthScoreValue" class="health-score-value">—</strong><span id="healthConnectionConfidence">Pending sync</span></div>
+        <p id="healthScoreReason" class="health-assessment">Sampling the current path…</p>
+        <p id="healthScoreProgress" class="health-subline">Preparing checks</p>
+        <p id="healthRouteNote" class="health-subline" hidden></p>
+        <div class="health-score-metrics"><span>Success <strong id="healthSuccessRate">—</strong></span><span>Median <strong id="healthP50">—</strong></span><span>Slow P95 <strong id="healthP95">—</strong></span><span>Jitter <strong id="healthJitter">—</strong></span></div>
+        <div class="health-network"><div><span>Codex path</span><strong id="healthCodexNetwork">Not checked</strong></div><div><span>Public reference</span><strong id="healthGeneralNetwork">Not checked</strong></div><div><span>API path</span><strong id="healthAPINetwork">Not checked</strong></div><div><span>Sign-in</span><strong id="healthAuthNetwork">Not checked</strong></div></div>
+        <p id="healthOfficial" class="health-official">Official status not checked</p>
+        <p id="healthOfficialComponents" class="health-subline" hidden></p>
+        <div class="health-checkbar"><span id="healthCheckTime">Connection not checked</span><button id="healthCheckButton" type="button">Retest current node</button></div>
+        <p id="healthCheckError" class="health-error" role="status" hidden></p>
+        <p id="healthAssessment" class="health-activity-note">Reading activity signals…</p>
+        <div class="health-token-context"><span>Reported in 60 s <strong id="healthTotalRate">—</strong></span><span>Output tokens <strong id="healthOutputRate">—</strong></span></div>
+        <p id="healthLastActivity" class="health-subline">Activity pending sync</p>
+        <details id="healthTaskDetails" class="health-task-details"><summary id="healthTaskSummary">Task activity</summary><ul id="healthTaskList"></ul></details>
+        <p class="health-method">Runtime status uses task activity and explicit errors; quiet tasks need confirmation. Public connection is a separate 0–100 point reference. It probes public endpoints, not authenticated sessions or model generation. Checks make no model calls and use no tokens. Usage includes input and cache; local tools or response waits may produce no new reports.</p>
+      </div>
     </section>
     <section id="feedView" class="feed-view" aria-label="Tasks across projects">
       <nav class="filters" aria-label="Task views">

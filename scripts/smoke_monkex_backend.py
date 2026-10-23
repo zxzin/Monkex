@@ -41,6 +41,10 @@ def main():
             assert b"Monkex" in urllib.request.urlopen(base).read()
             feed = json.load(urllib.request.urlopen(base + "/api/threads"))
             assert feed["threads"] == [] and feed.get("error")
+            diagnostics = json.load(urllib.request.urlopen(base + "/api/diagnostics"))
+            assert diagnostics["data_state"] == "stale"
+            assert diagnostics["assessment"]["code"] == "sync_unavailable"
+            assert diagnostics["score"]["value"] is None
             request = urllib.request.Request(base + "/api/threads", headers={"Origin": "https://untrusted.example"})
             try:
                 urllib.request.urlopen(request)
@@ -52,7 +56,7 @@ def main():
                 raise AssertionError("Private prototype was packaged")
             except urllib.error.HTTPError as error:
                 assert error.code == 404
-            print("PASS: packaged backend, isolated empty state, missing-Codex guidance, static UI, origin rejection, prototype exclusion")
+            print("PASS: packaged backend, isolated empty state, missing-Codex guidance, unknown runtime score, static UI, origin rejection, prototype exclusion")
         finally:
             if os.name == "nt":
                 subprocess.run(["taskkill.exe", "/PID", str(process.pid), "/T", "/F"],

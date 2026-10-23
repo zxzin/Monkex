@@ -15,12 +15,50 @@ BUCKET_SECONDS = 5
 
 
 @dataclass
+class _UsageCounter:
+    """A separately reported cumulative field with its own observed baseline."""
+    total: int | None = None
+    first_at: float | None = None
+    last_at: float | None = None
+    reports: int = 0
+    deltas: deque = field(default_factory=lambda: deque(maxlen=2048))
+
+    def record(self, at: float, value: Any, *, reset: bool = False) -> None:
+        valid = type(value) is int and 0 <= value <= 2**63 - 1
+        if reset or not valid or (self.total is not None and value < self.total):
+            self.total = self.first_at = self.last_at = None
+            self.reports = 0
+            self.deltas.clear()
+        if not valid:
+            return
+        if self.total is not None and value > self.total:
+            self.deltas.append((at, value - self.total))
+        if self.first_at is None:
+            self.first_at = at
+        if self.last_at != at or self.total != value:
+            self.reports += 1
+        self.total, self.last_at = value, at
+        while self.deltas and self.deltas[0][0] <= at - WINDOW_SECONDS:
+            self.deltas.popleft()
+
+    def snapshot(self, now: float) -> tuple[bool, float | None, int | None]:
+        ready = self.reports >= 2
+        if not ready:
+            return False, None, None
+        elapsed = max(1, min(WINDOW_SECONDS, now - self.first_at))
+        recent = sum(delta for at, delta in self.deltas if now - WINDOW_SECONDS < at <= now)
+        return True, round(recent * 60 / elapsed, 1), recent
+
+
+@dataclass
 class TokenMeter:
     total: int | None = None
     first_at: float | None = None
     last_at: float | None = None
     reports: int = 0
     deltas: deque = field(default_factory=lambda: deque(maxlen=2048))
+    input_usage: _UsageCounter = field(default_factory=_UsageCounter)
+    output_usage: _UsageCounter = field(default_factory=_UsageCounter)
 
     def record(self, at: float, info: Any) -> None:
         if not isinstance(info, dict):
@@ -33,6 +71,12 @@ class TokenMeter:
             return
         if self.last_at is not None and at < self.last_at:
             return
+        reset = self.total is not None and total < self.total
+        # Input already includes cached input; output already includes reasoning.
+        # Missing component fields establish an unknown interval and a fresh
+        # baseline when that component is reported again.
+        self.input_usage.record(at, usage.get("input_tokens"), reset=reset)
+        self.output_usage.record(at, usage.get("output_tokens"), reset=reset)
         if self.total is not None and total > self.total:
             self.deltas.append((at, total - self.total))
         elif self.total is not None and total < self.total:
@@ -58,11 +102,16 @@ class TokenMeter:
                 buckets[index] += delta
         ready = self.reports >= 2
         elapsed = max(1, min(WINDOW_SECONDS, now - self.first_at)) if self.first_at is not None else 0
+        input_ready, input_rate, recent_input = self.input_usage.snapshot(now)
+        output_ready, output_rate, recent_output = self.output_usage.snapshot(now)
         return {"source": "local_token_count", "available": self.total is not None,
                 "ready": ready, "tokens_per_min": round(recent * 60 / elapsed, 1) if ready else None,
                 "recent_tokens": recent if ready else None, "window_seconds": WINDOW_SECONDS,
                 "sample_seconds": round(elapsed, 1), "last_report_at": self.last_at,
-                "buckets": buckets, "bucket_seconds": BUCKET_SECONDS}
+                "buckets": buckets, "bucket_seconds": BUCKET_SECONDS,
+                "input_ready": input_ready, "output_ready": output_ready,
+                "input_tokens_per_min": input_rate, "output_tokens_per_min": output_rate,
+                "recent_input_tokens": recent_input, "recent_output_tokens": recent_output}
 
 
 def aggregate_project_tokens(cards: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

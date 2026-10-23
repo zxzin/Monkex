@@ -19,6 +19,7 @@ from .app_server import AppServerClient, AppServerError, CodexNotFoundError
 from .read_receipts import CodexReadReceipts
 from .activity import ActivityFeed
 from .runtime_observer import LocalRuntimeObserver
+from .diagnostics import ConnectionMonitor, runtime_diagnostics
 from .weekly_quota import weekly_quota, primary_usage, quota_details
 from .platform_support import data_directory, open_codex_thread
 
@@ -99,6 +100,7 @@ class WorkTwinShell:
         client: AppServerClient | None = None,
         usage_poll_seconds: float = 30.0,
         runtime_observer: LocalRuntimeObserver | None = None,
+        connection_monitor: ConnectionMonitor | None = None,
     ) -> None:
         self.state_path = state_path.expanduser().resolve()
         self.events = EventHub()
@@ -126,6 +128,8 @@ class WorkTwinShell:
         self._usage_thread: threading.Thread | None = None
         self._feed_thread: threading.Thread | None = None
         self.feed = ActivityFeed(self)
+        # Fixture clients never initiate public probes unless explicitly injected.
+        self.connection_monitor = connection_monitor or (ConnectionMonitor() if client is None else None)
 
     def start(self) -> None:
         try:
@@ -147,7 +151,29 @@ class WorkTwinShell:
 
     def close(self) -> None:
         self._stop_event.set()
+        if self.connection_monitor:
+            self.connection_monitor.close()
         self.client.close()
+
+    def diagnostics(self, *, check=False, reset=False) -> dict[str, Any]:
+        # This path reads memory only; probing never holds up task refresh or UI.
+        with self._feed_lock:
+            feed = deepcopy(self._feed_snapshot)
+            feed_at = self._feed_at
+        connected = bool(self.client.running and not feed.get("error") and not feed.get("loading"))
+        network = official = None
+        if self.connection_monitor:
+            if check:
+                self.connection_monitor.request_check(force=True, reset=reset)
+            network, official = self.connection_monitor.snapshot()
+        result = runtime_diagnostics(feed.get("threads", []), feed_at=feed_at,
+                                     connected=connected, observer=self.runtime_observer,
+                                     network=network, official=official)
+        if self.connection_monitor:
+            result["score"] = self.connection_monitor.score({"current": result["data_state"] == "current",
+                                                             "active_tasks": sum(t["signal"] == "active" for t in result["tasks"]),
+                                                             "quiet_tasks": result["activity"]["quiet_tasks"]}, official)
+        return result
 
     def health(self) -> dict[str, Any]:
         with self._state_lock:
@@ -351,7 +377,8 @@ class WorkTwinShell:
         if result.get("error") or result["stale"] or not self.client.running:
             for card in result.get("threads", []):
                 if card.get("status") == "running":
-                    card.update(status="unknown", stage="状态待同步", can_interrupt=False)
+                    card.update(status="unknown", last_observed_status="running", sync_pending=True,
+                                stage="状态待同步", can_send=False, can_interrupt=False)
         return result
 
     def _feed_loop(self) -> None:
@@ -362,6 +389,8 @@ class WorkTwinShell:
                 with self._feed_lock:
                     self._feed_snapshot = result
                     self._feed_at = time.time()
+                if self.connection_monitor and any(card.get("status") == "running" for card in result.get("threads", [])):
+                    self.connection_monitor.request_check()
                 self.events.publish({"type": "feed_updated", "at": _utc_now()})
             except Exception as error:
                 with self._feed_lock:

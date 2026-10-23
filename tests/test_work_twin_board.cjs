@@ -34,7 +34,13 @@ assert.deepEqual(ids(ctx.filtered()),['history','week-edge'],'history contains o
 state.filter='recent';
 assert.ok(ids(ctx.filtered()).includes('fresh-event'),'actual runtime event advances last activity');
 state.connected=false;
-assert.ok(!ids(ctx.filtered()).includes('long-running'),'offline state cannot pin stale running tasks');
+assert.ok(ids(ctx.filtered()).includes('long-running'),'transient disconnection preserves a known running card for pending sync');
+const longRunning=state.threads.find(t=>t.id==='long-running');
+Object.assign(longRunning,{status:'unknown',last_observed_status:'running',sync_pending:true});
+assert.ok(ids(ctx.filtered()).includes('long-running'),'explicit pending sync preserves the same card');
+Object.assign(longRunning,{status:'result_ready',sync_pending:false});
+assert.ok(!ids(ctx.filtered()).includes('long-running'),'authoritative terminal state restores the normal date filter');
+Object.assign(longRunning,{status:'running'});
 state.connected=true;
 assert.equal(ctx.activityTime({updated_at:'2026-09-06T15:00:00Z'}),Date.parse('2026-09-06T15:00:00Z')/1000);
 assert.ok(!ids(ctx.boardSets(now+1).recent).includes('day-edge'),'24-hour boundary moves without a new event');

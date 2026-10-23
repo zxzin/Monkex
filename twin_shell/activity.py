@@ -28,8 +28,14 @@ class ActivityFeed:
         self.project_tokens.clear()
 
     def telemetry(self, card: dict[str, Any]) -> None:
+        runtime = {"phase": "unknown", "activity_at": 0, "phase_at": 0, "pending_tools": 0,
+                   "observation_available": False, "turn_id": None}
         if self.shell.runtime_observer:
             card["tokens"] = self.shell.runtime_observer.token_snapshot(card["id"])
+            evidence = self.shell.runtime_observer.snapshot(card["id"])
+            if evidence.get("turn_id") and evidence["turn_id"] == card.get("latest_turn_id"):
+                runtime.update({key: evidence[key] for key in runtime if key in evidence})
+        card["runtime"] = runtime
         card["project_tokens"] = deepcopy(self.project_tokens.get(card.get("cwd")))
 
     def detail(self, thread_id: str, *, force: bool = False) -> dict[str, Any]:
@@ -39,7 +45,7 @@ class ActivityFeed:
         evidence = observer.snapshot(thread_id) if observer else {}
         cached = self.cache.get(thread_id)
         metadata_time = self.metadata.get(thread_id, {}).get("updatedAt")
-        ttl = 8 if thread_id in self.shell._connected_threads else 60
+        ttl = 8 if thread_id in self.shell._connected_threads or (cached and cached[1]["card"].get("status") == "running") else 60
         if not force and cached and time.monotonic() - cached[0] < ttl and cached[1].get("runtime_revision") == evidence.get("revision") and (metadata_time is None or cached[1]["card"].get("updated_at") == metadata_time):
             payload = deepcopy(cached[1])
             self.telemetry(payload["card"])
@@ -54,6 +60,8 @@ class ActivityFeed:
         # Ownership is a live connection, not a persisted flag from yesterday.
         owned = thread_id in shell._connected_threads
         card = describe(raw, turns, owned=owned)
+        latest = turns[-1] if turns else {}
+        card.update(latest_turn_status=latest.get("status"), latest_turn_completed_at=latest.get("completedAt") or 0)
         card.update({"id": thread_id, "name": raw.get("name") or "未命名任务", "cwd": raw.get("cwd"), "updated_at": raw.get("updatedAt"), "owned_by_shell": owned})
         card["updated_at"] = self.metadata.get(thread_id, {}).get("updatedAt") or card["updated_at"]
         if observer:
@@ -132,13 +140,39 @@ class ActivityFeed:
             cursor = page.get("nextCursor")
             if not cursor:
                 break
+        # A successful paginated list can briefly omit an existing active row.
+        # Verify its exact identity before retiring it; API errors retain only
+        # the already-observed running lifecycle, explicitly pending sync.
+        cutoff = time.time() - 7 * 86400
+        with shell._state_lock:
+            pending_ids = {key for key, entry in shell._state["observations"].items()
+                           if entry.get("result_version") and entry.get("result_version") != entry.get("ack_version")
+                           and (entry.get("result_completed_at") or 0) >= cutoff}
+        missing_ids = [key for key, (_, payload) in list(self.cache.items()) if key not in seen
+                       and (payload["card"].get("status") == "running" or key in pending_ids)]
+        if shell.runtime_observer:
+            shell.runtime_observer.refresh([r["id"] for r in raw_threads] + missing_ids)
+        def recover(thread_id: str) -> dict[str, Any] | None:
+            try:
+                raw = shell._result_or_raise(shell.client.request("thread/read", {"threadId": thread_id, "includeTurns": False}), "核对运行任务").get("thread")
+                if not isinstance(raw, dict) or raw.get("id") != thread_id or raw.get("archived") is True:
+                    self.cache.pop(thread_id, None)
+                    return None
+                return raw
+            except Exception:
+                cached = self.cache.get(thread_id)
+                if not cached:
+                    return None
+                card = cached[1]["card"]
+                return {"id": thread_id, "name": card.get("name"), "cwd": card.get("cwd"), "updatedAt": card.get("updated_at")}
+        if missing_ids:
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                raw_threads.extend(raw for raw in pool.map(recover, missing_ids) if raw is not None)
         # Hydrate the visible seven-day window, all active tasks, and existing
         # pending results. The first 40 rows retain the cold-start fallback.
         self.metadata = {r["id"]: {"updatedAt": r.get("updatedAt")} for r in raw_threads}
-        if shell.runtime_observer:
-            shell.runtime_observer.refresh(list(self.metadata))
         hydrate_ids = {r["id"] for r in raw_threads[:40]}
-        cutoff = time.time() - 7 * 86400
+        hydrate_ids.update(missing_ids)
         hydrate_ids.update(r["id"] for r in raw_threads if isinstance(r.get("updatedAt"), (int, float)) and r["updatedAt"] >= cutoff)
         if shell.runtime_observer:
             for raw in raw_threads:
@@ -151,13 +185,23 @@ class ActivityFeed:
             thread_id = raw["id"]
             if thread_id in hydrate_ids:
                 try:
-                    card = self.detail(thread_id)["card"]
+                    card = self.detail(thread_id, force=thread_id in missing_ids)["card"]
                     # State-db metadata is the authoritative activity ordering.
                     card["updated_at"] = raw.get("updatedAt") or card.get("updated_at")
                     self.observe(card)
                     return card
                 except Exception:
-                    pass
+                    cached = self.cache.get(thread_id)
+                    if cached and cached[1]["card"].get("status") == "running":
+                        card = deepcopy(cached[1]["card"])
+                        if shell.runtime_observer:
+                            apply_runtime(card, shell.runtime_observer.snapshot(thread_id))
+                        card.update(can_send=False, can_interrupt=False, sync_pending=True,
+                                    runtime_observation_available=False, runtime_activity_fresh=False,
+                                    observation="已观测运行 · 等待同步")
+                        self.telemetry(card)
+                        self.observe(card)
+                        return card
             card = describe(raw, [], owned=False)
             card.update({"id": thread_id, "name": raw.get("name") or "未命名任务", "cwd": raw.get("cwd"), "updated_at": raw.get("updatedAt"), "owned_by_shell": False, "unread": False})
             if shell.runtime_observer:

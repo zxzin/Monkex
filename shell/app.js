@@ -9,6 +9,7 @@ const state = {
   petInteractionCooldownUntil: 0, boardSize: 0, autoCollapseTimer: null, hoverCollapseTimer: null,
   pointerInside: false, selectionRevision: 0, nativePointerInside: null,
   hoverExpandTimer: null, hoverPollTimer: null, hoverTrackingStopped: false, petDragging: false,
+  diagnostics: null, diagnosticsBusy: false, diagnosticsFailed: false, diagnosticsResetting: false, diagnosticsTimer: null, diagnosticsStopped: false,
 };
 const PET_POSES = new Set(["idle", "hello", "peek", "nod"]);
 
@@ -88,10 +89,12 @@ function node(tag, className, text) {
   return e;
 }
 function shortStatus(card) {
-  return {running:"进行中",unread:"已完成",read:"已读"}[displayStatus(card)];
+  return {running:"进行中",pending:"待同步",unread:"已完成",read:"已读"}[displayStatus(card)];
 }
 function displayStatus(card) {
-  return state.connected&&card.status==="running"?"running":card.unread?"unread":"read";
+  const running=card.status==="running";
+  if((running&&(!state.connected||card.sync_pending))||(card.status==="unknown"&&card.last_observed_status==="running"&&card.sync_pending))return "pending";
+  return running?"running":card.unread?"unread":"read";
 }
 function formatRate(value) {
   if(!Number.isFinite(value))return "—";
@@ -101,6 +104,19 @@ function formatRate(value) {
 }
 function rateText(tokens) {
   return state.connected&&tokens?.ready?formatRate(tokens.tokens_per_min)+" /min":"—";
+}
+function taskRunState(card,now=Date.now()/1000) {
+  const runtime=card.runtime||{},tokens=card.tokens||{};
+  if(displayStatus(card)==="pending"||runtime.observation_available===false)return {label:"待同步",hint:"运行记录暂未同步，保留上次任务状态"};
+  const age=Number.isFinite(runtime.activity_at)?now-runtime.activity_at:null;
+  const reportFresh=Number.isFinite(tokens.last_report_at)&&now-tokens.last_report_at<=60&&now-tokens.last_report_at>=-30;
+  if(reportFresh&&tokens.ready&&tokens.tokens_per_min>0)return {label:formatRate(tokens.tokens_per_min)+" t/min",hint:"近60秒上报的 Token 用量，含输入、缓存与输出；属于用量速率"};
+  if(runtime.pending_tools>0)return {label:age!==null&&age>=180?"等待工具":"工具执行",hint:"已发起工具调用，尚未收到完成记录；本地 Python 等工具执行期间可能没有新增 Token 上报"};
+  if(age!==null&&age>=180)return {label:"待确认",hint:"较长时间没有新运行记录；可能在思考或等待，需查看原对话确认"};
+  if(runtime.phase==="starting")return {label:"等待响应",hint:"回合已开始，尚未观察到首个模型或工具活动"};
+  if(runtime.phase==="thinking")return {label:"思考中",hint:"最近记录为思考活动，用量可能延迟上报"};
+  if(runtime.phase==="response")return {label:"输出中",hint:"最近记录为输出活动，用量可能延迟上报"};
+  return {label:"等待上报",hint:"近60秒没有新增 Token 上报；这不是进度百分比，也不代表任务停止"};
 }
 function fanPeriod(rate) {
   return Number.isFinite(rate)&&rate>0?Math.max(.55,4/(1+Math.sqrt(rate/30000))):0;
@@ -143,10 +159,10 @@ function updateTaskRow(button,card) {
   title.append(node("span","row-status",shortStatus(card)));
   const meta=node("div","task-meta"),progress=node("span","stage",card.summary||card.project_label||"任务");
   progress.title=card.summary?"最近进展 · "+card.summary:"";meta.append(progress);
-  if(status==="running"){
-    const speed=node("span","row-rate");speed.title="当前任务 · 近 60 秒 Token 消耗速度，含输入与输出";
-    const fan=node("span","token-fan mini-fan");renderTokenFan(fan,card.tokens,true);
-    speed.append(fan,node("span","",rateText(card.tokens)));meta.append(speed);
+  if(status==="running"||status==="pending"){
+    const observed=taskRunState(card),speed=node("span","row-rate");speed.title=observed.hint;
+    const measured=observed.label.includes("t/min"),fan=node("span","token-fan mini-fan");renderTokenFan(fan,measured?card.tokens:null,status==="running"&&measured);
+    speed.append(fan,node("span","",observed.label));meta.append(speed);
   }else meta.append(node("time","",relativeTime(activityTime(card))));
   copy.append(title,meta);button.replaceChildren(icon,copy);
 }
@@ -255,9 +271,16 @@ function quotaCountdown(timestamp,now=Date.now()/1000) {
   return Math.floor(minutes/1440)+" 天 "+Math.floor(minutes%1440/60)+" 小时后";
 }
 function setQuotaResetExpanded(expanded) {
+  if(expanded&&$("runtimeHealth"))setHealthExpanded(false);
   $("quotaResetWindows").hidden=!expanded;
   $("quotaResetToggle").setAttribute("aria-expanded",String(expanded));
   $("quotaResetToggle").title=expanded?"收起额度重置时间":"展开额度重置时间";
+  syncBoardSize(false,false);
+}
+function setHealthExpanded(expanded) {
+  $("runtimeHealth").hidden=!expanded;
+  $("runtimeHealthToggle").setAttribute("aria-expanded",String(expanded));
+  if(expanded){$("resetCardDetails").open=false;setQuotaResetExpanded(false);}
   syncBoardSize(false,false);
 }
 function renderQuotaDetails(now=Date.now()/1000) {
@@ -319,13 +342,160 @@ function renderQuotaFlow(element,cards,quota) {
   const description=rate>0?' · 运行任务近60秒 Token 速率合计 '+Math.round(rate).toLocaleString()+' /min · 香蕉币缓转表示活跃，不代表逐枚扣费':' · 当前无已观测的 Token 消耗';
   element.title+=description;
 }
+function healthAge(seconds) {
+  if(!Number.isFinite(seconds)||seconds<0)return "未知";
+  if(seconds<60)return Math.floor(seconds)+" 秒前";
+  if(seconds<3600)return Math.floor(seconds/60)+" 分钟前";
+  return Math.floor(seconds/3600)+" 小时前";
+}
+function healthTime(timestamp) {
+  if(!Number.isFinite(timestamp)||timestamp<=0)return "未检测";
+  return new Date(timestamp*1000).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+function healthPhase(phase) {
+  return {thinking:"思考",tool:"工具活动",response:"输出",waiting:"等待",starting:"启动",unknown:"类型未知"}[phase]||"类型未知";
+}
+function healthNetworkText(check) {
+  if(!check)return "未检测";
+  const labels={reachable:"可达",slow:"较慢",http_error:"HTTP 响应",timeout:"超时",dns_error:"DNS 失败",tls_error:"TLS 失败",unreachable:"连接失败"};
+  const label=labels[check.state]||"未知";
+  const latency=Number.isFinite(check.latency_ms)?Math.round(check.latency_ms)+" ms":"";
+  return label+(latency?" · "+latency:"")+(check.state==="http_error"&&Number.isInteger(check.http_status)?" · "+check.http_status:"");
+}
+function renderOperationalHealth(data,now) {
+  const fresh=!state.diagnosticsFailed&&data?.data_state==="current"&&Number.isFinite(data?.observed_at)&&now-data.observed_at<=30&&now-data.observed_at>=-30;
+  const value=fresh?data?.operational:null;
+  const states={active:["活跃","ok"],tool_running:["工具中","ok"],quiet:["待确认","notice"],waiting:["等待响应","notice"],error:["异常","warning"],unknown:["待确认","unknown"],idle:["空闲","unknown"]};
+  const selected=states[value?.state]||states.unknown;
+  let [label,level]=selected;
+  if(value?.state==="tool_running"&&value.level!=="ok"){label="等待工具";level="notice";}
+  const reasons={active:"已观察到近期任务活动。",tool_running:"已观察到工具调用，等待完成记录。",tool_wait:"部分工具较长时间未返回；可以打开原对话确认，当前无法判断工具是否仍在执行。",quiet:"部分任务较长时间没有新活动，需要查看原对话确认。",awaiting_response:"任务已经启动，尚未观察到首个模型或工具响应。",recent_connection_error:"最近回合记录了连接失败，请查看原对话；这里没有执行重连。",recent_task_error:"最近回合记录了执行错误，请查看原对话确认原因。",activity_unconfirmed:"部分任务的运行记录暂不可用，等待同步确认。",sync_unavailable:"运行记录暂未同步，保留上次任务卡片。",idle:"当前没有运行任务，可按需检查连接。"};
+  const reason=reasons[value?.code]||reasons.sync_unavailable;
+  const affected=Number.isInteger(value?.affected_tasks)&&value.affected_tasks>0?value.affected_tasks:0;
+  $("healthSummary").textContent=label;
+  $("healthSummary").title=reason;
+  $("healthOperationalReason").textContent=(affected?affected+" 项任务 · ":"")+reason;
+  $("runtimeHealth").dataset.level=level;
+  const badge=$("runtimeHealthToggle");badge.dataset.level=level;
+  badge.dataset.checking=String(Boolean(state.diagnosticsResetting||data?.network?.checking));
+  const alert=$("healthRuntimeAlert");alert.dataset.level=level;
+  alert.hidden=level==="ok"||value?.state==="idle";
+  const scoreLabel="公共连接质量 · "+$("healthScoreValue").textContent;
+  badge.setAttribute("aria-label",scoreLabel+" · Codex 健康度 · "+label);
+  badge.title=scoreLabel+"\n"+"Codex 健康度 · "+label+"\n"+reason;
+}
+function renderHealthScore(data,now=Date.now()/1000) {
+  const score=data?.score||{},network=data?.network||{};
+  const current=!state.diagnosticsFailed&&!state.diagnosticsResetting&&Number.isFinite(data?.observed_at)&&now-data.observed_at<=30&&now-data.observed_at>=-30;
+  const stale=!state.diagnosticsResetting&&(score.grade==="stale"||(network.stale===true&&Number.isFinite(network.checked_at)));
+  const valid=current&&!stale&&["good","fair","poor"].includes(score.grade)&&Number.isFinite(score.value)&&score.value>=0&&score.value<=100;
+  const grade=stale?"stale":valid?score.grade:"collecting";
+  const confidence=valid?{provisional:"初步",short_check:"短测完成"}[score.confidence]||"初步":stale?"需重测":current||state.diagnosticsResetting?"采样中":"待同步";
+  $("healthScoreValue").textContent=valid?Math.round(score.value)+" /100":"—";
+  $("healthBadgeValue").textContent=valid?String(Math.round(score.value)):"—";
+  $("runtimeHealthToggle").dataset.scoreLevel=valid?{good:"ok",fair:"notice",poor:"warning"}[score.grade]:"unknown";
+  $("healthScoreValue").title="评分来自公开链路采样；Codex 实际响应仍需任务验证";
+  $("healthConnectionConfidence").textContent=confidence;
+  const reasons={good:"当前链路表现顺畅，可继续观察实际任务进展。",fair:"当前链路存在延迟或波动，可对比切换节点后的短测。",poor:"当前链路存在较多失败或波动，可切换节点后重新检测。",collecting:"正在建立当前节点的参考，需要多轮采样后评分。",stale:"这份采样已过期，请重新检测当前节点。"};
+  const noteLabels={partial_coverage:"服务采样尚未齐全。",insufficient_rounds:"独立采样轮数尚不足。",runtime_unconfirmed:"实际 Codex 响应仍待验证。",runtime_quiet:"部分运行任务近期没有新活动。",missing_latency:"延迟数据不足。",failed_latency_floor:"失败请求已纳入延迟评估。",http_restricted:"检测地址限制访问，评分仅作链路参考。",unexpected_response:"检测地址返回了非预期响应。",service_failures:"部分服务连接探测失败。",codex_recent_failures:"近期 Codex 链路探测失败。",official_codex_degraded:"官方报告 Codex 性能下降。",official_codex_outage:"官方报告 Codex 服务中断。",official_other_notice:"官方其他服务有异常报告。",official_status_unknown:"官方状态暂不可用。",short_check_only:"短测反映当前片段，仍需持续观察。"};
+  const notes=Array.isArray(score.notes)?score.notes:[];
+  const priority=["official_codex_outage","official_codex_degraded","codex_recent_failures","service_failures","http_restricted","unexpected_response","partial_coverage","insufficient_rounds","missing_latency","runtime_quiet","runtime_unconfirmed","official_status_unknown"];
+  const reasonCode=priority.find(code=>notes.includes(code));
+  $("healthScoreReason").textContent=(current||state.diagnosticsResetting||stale?reasons[grade]:"正在读取当前链路评分…")+(current&&reasonCode?" "+noteLabels[reasonCode]:"");
+  const count=Number.isInteger(score.sample_count)&&score.sample_count>=0?score.sample_count:0;
+  const rounds=Number.isInteger(network.rounds_completed)?network.rounds_completed:Number.isInteger(score.round_count)?score.round_count:0;
+  const planned=Number.isInteger(network.rounds_planned)&&network.rounds_planned>0?network.rounds_planned:6;
+  const progress=state.diagnosticsResetting?"新一轮采样即将开始":"公开链路参考 · "+rounds+"/"+planned+" 轮 · "+count+" 次探测";
+  $("healthScoreProgress").textContent=progress+(network.node_changed_at?" · 统计已重置":"");
+  $("healthScoreProgress").title=notes.map(code=>noteLabels[code]).filter(Boolean).join("\n");
+  $("healthRouteNote").hidden=!(network.exit_observed===false&&Number.isFinite(network.checked_at));
+  $("healthRouteNote").textContent="出口未确认；切换节点后请重新测量。";
+  if(score.components&&valid)$("healthScoreValue").title+="\n"+"可靠性 "+formatRate(score.components.reliability)+"/60 · "+"延迟 "+formatRate(score.components.latency)+"/25 · "+"稳定性 "+formatRate(score.components.stability)+"/15";
+  for(const [key,id,suffix]of [["success_percent","healthSuccessRate","%"],["p50_ms","healthP50"," ms"],["p95_ms","healthP95"," ms"],["jitter_ms","healthJitter"," ms"]]){
+    $(id).textContent=current&&!stale&&Number.isFinite(score[key])?Math.round(score[key])+suffix:"—";
+  }
+}
+function renderDiagnostics(now=Date.now()/1000) {
+  const panel=$("runtimeHealth");if(!panel)return;
+  const data=state.diagnostics,activity=data?.activity||{},assessment=data?.assessment||{};
+  const fresh=!state.diagnosticsFailed&&data?.data_state==="current"&&Number.isFinite(data?.observed_at)&&now-data.observed_at<=30&&now-data.observed_at>=-30;
+  renderHealthScore(data,now);
+  renderOperationalHealth(data,now);
+  const explanations={sync_unavailable:"运行信号暂未同步，恢复连接后再判断。",idle:"当前没有运行任务，可按需检测连接。",network_unavailable:"公开连接探测失败，可检查网络或代理后重测。",openai_path:"公共网络可达，OpenAI 连接较慢或失败，可切换链路后重测。",connection_slow:"本次公共连接耗时较高，可重测并对照任务活动。",reference_path:"公共网络参照探测失败，OpenAI 连接仍可达，可再次检测。",endpoint_response:"连接已建立，检测地址返回 HTTP 限制或错误；请查看状态码。该结果仅代表公开检测地址。",service_notice:"官方报告了服务异常，可能影响部分任务。",quiet:"部分任务较久没有新活动，可对照连接和官方状态判断。",active:"已观察到新活动，可结合输出与任务记录判断进展。",waiting:"运行任务暂未出现新报告，可能在思考、调用工具或等待响应。"};
+  Object.assign(explanations,{tool_running:"当前有工具调用尚未完成，工具执行期间可能没有新增 Token。",tool_wait:"部分工具较长时间未返回，需要确认原对话。",awaiting_response:"已发起任务，等待首个响应。",activity_unconfirmed:"部分任务的记录待同步。",recent_connection_error:"最近回合记录了连接失败。",recent_task_error:"最近回合记录了执行错误。"});
+  const output=fresh&&Number.isFinite(activity.output_tokens_per_min)?activity.output_tokens_per_min:null;
+  $("healthAssessment").textContent=fresh?(explanations[assessment.code]||explanations.waiting):explanations.sync_unavailable;
+  $("healthTotalRate").textContent=fresh?formatRate(activity.total_tokens_per_min):"—";
+  $("healthOutputRate").textContent=output===null?"—":formatRate(output);
+  $("healthOutputRate").title=output===0?"近 60 秒未收到输出上报；思考与工具活动可能仍在继续":"近 60 秒已上报输出 Token，报告可能延迟";
+  const activityAge=Number.isFinite(activity.last_activity_at)?Math.max(0,now-activity.last_activity_at):null;
+  $("healthLastActivity").textContent=fresh?"最近活动 "+healthAge(activityAge)+" · "+(Number.isInteger(data.running_tasks)?data.running_tasks:0)+" 项运行":"最近活动待同步";
+  const network=data?.network||{},checks=!state.diagnosticsResetting&&Array.isArray(network.checks)?network.checks:[];
+  for(const [id,target]of [["general","healthGeneralNetwork"],["codex","healthCodexNetwork"],["api","healthAPINetwork"],["auth","healthAuthNetwork"]]){
+    const check=checks.find(item=>item.id===id),element=$(target);
+    element.textContent=healthNetworkText(check)+(network.stale&&check?" · 旧数据":"");
+    element.dataset.state=check?.state||"unknown";
+    element.title=check?"近期中位延迟 "+(Number.isFinite(check.median_ms)?Math.round(check.median_ms)+" ms":"未知")+" · 参考基线 "+(Number.isFinite(check.baseline_ms)?Math.round(check.baseline_ms)+" ms":"未知")+" · 连续失败 "+(Number.isInteger(check.failure_streak)?check.failure_streak:0):"未检测";
+  }
+  const official=data?.official||{},incidents=Array.isArray(official.incidents)?official.incidents:[],components=Array.isArray(official.components)?official.components:[];
+  const officialState={operational:"官方：暂无已知异常",degraded:"官方：报告服务异常",unknown:"官方状态暂不可用"}[official.state]||"官方状态待检测";
+  $("healthOfficial").textContent=officialState+(official.stale?" · 旧数据":"")+(incidents.length?" · "+String(incidents[0].name||""):"");
+  $("healthOfficial").title=components.map(item=>String(item.name)+": "+String(item.status)).join("\n")+(official.checked_at?"\n"+"检查于 "+healthTime(official.checked_at):"");
+  const componentStates={operational:"正常",degraded_performance:"性能下降",partial_outage:"部分中断",major_outage:"服务中断",under_maintenance:"维护中"};
+  $("healthOfficialComponents").hidden=!components.length;
+  $("healthOfficialComponents").textContent=components.map(item=>String(item.name)+" · "+(componentStates[item.status]||"状态未知")).join(" / ");
+  $("healthCheckTime").textContent=network.blocked?"检测超时，等待系统连接结束后重试":state.diagnosticsResetting||network.checking?"连接检测中…":network.checked_at?"检查于 "+healthTime(network.checked_at)+(network.stale?" · 旧数据":""):"尚未检测连接";
+  $("healthCheckTime").title=network.route==="system_proxy"?"检测采用系统代理；Codex 实际链路可能不同":"检测采用当前系统链路，可能经过 VPN 隧道";
+  $("healthCheckButton").disabled=Boolean(state.diagnosticsBusy||network.checking||network.blocked);
+  $("healthCheckButton").setAttribute("aria-busy",String(Boolean(state.diagnosticsBusy||network.checking)));
+  const tasks=Array.isArray(data?.tasks)?data.tasks:[],issues=fresh&&Array.isArray(data?.recent_issues)?data.recent_issues:[],list=$("healthTaskList"),scroll=list.scrollTop;
+  $("healthTaskSummary").textContent="各任务运行信号 · "+tasks.length+(fresh&&activity.quiet_tasks>0?" · "+activity.quiet_tasks+" 项静默":"");
+  list.replaceChildren();
+  for(const task of tasks){
+    const row=node("li","health-task"),title=node("div","health-task-title");
+    const name=node("strong","",String(task.name||"任务"));name.title=String(task.name||"任务");
+    title.append(name,node("span","",fresh?healthAge(task.activity_age_seconds):"待同步"));
+    row.dataset.signal=fresh?String(task.signal||"unknown"):"unknown";
+    const meta=node("p","",healthPhase(task.phase)+" · "+"上报输出 "+(fresh?formatRate(task.output_tokens_per_min):"—")+"/min");
+    meta.title=[task.model,task.effort].filter(value=>typeof value==="string").join(" · ")+" · "+"最近上报 "+healthAge(task.report_age_seconds);
+    row.append(title,meta);list.append(row);
+  }
+  for(const issue of issues){
+    const row=node("li","health-task"),title=node("div","health-task-title");
+    title.append(node("strong","",String(issue.name||"任务")),node("span","",healthAge(issue.age_seconds)));
+    row.dataset.signal="quiet";
+    row.append(title,node("p","",issue.code==="http_connection_failed"?"最近回合连接失败":"最近回合执行错误"));list.append(row);
+  }
+  if(!tasks.length&&!issues.length)list.append(node("li","health-no-tasks",fresh?"暂无运行任务":"运行信号待同步"));
+  list.scrollTop=scroll;syncBoardSize(false,false);
+}
+async function refreshDiagnostics(check=false) {
+  if(state.diagnosticsBusy||state.diagnosticsStopped)return;
+  state.diagnosticsBusy=true;state.diagnosticsResetting=check;renderDiagnostics();
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
+  try{
+    const response=await fetch(check?"/api/diagnostics/check":"/api/diagnostics",{cache:"no-store",signal:controller.signal,...(check?{method:"POST",headers:{"Content-Type":"application/json","X-Work-Twin":"1"},body:JSON.stringify({reset:true})}:{})});
+    if(!response.ok)throw Error("运行检测暂不可用，请稍后重试");
+    const data=await response.json();
+    if(!data||!Number.isFinite(data.observed_at)||!data.activity)throw Error("运行检测暂不可用，请稍后重试");
+    state.diagnostics=data;state.diagnosticsFailed=false;$("healthCheckError").hidden=true;
+  }catch(error){
+    state.diagnosticsFailed=true;
+    if(check){$("healthCheckError").textContent="运行检测暂不可用，请稍后重试";$("healthCheckError").hidden=false;}
+  }finally{
+    clearTimeout(timeout);state.diagnosticsBusy=false;state.diagnosticsResetting=false;renderDiagnostics();
+  }
+}
+function stopDiagnostics() {
+  state.diagnosticsStopped=true;clearInterval(state.diagnosticsTimer);
+}
 function activityTime(card) {
   const seconds=value=>typeof value==="number"?value:typeof value==="string"?Date.parse(value)/1000:NaN;
   const times=[seconds(card.updated_at),seconds(card.runtime_observed_at)].filter(t=>Number.isFinite(t)&&t>0);
   return times.length?Math.max(...times):0;
 }
 function boardSets(now=Date.now()/1000) {
-  const active=t=>state.connected&&t.status==="running";
+  const active=t=>t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true);
   const age=t=>activityTime(t)?Math.max(0,now-activityTime(t)):Infinity;
   const recent=state.threads.filter(t=>active(t)||age(t)<=86400);
   return {
@@ -335,7 +505,7 @@ function boardSets(now=Date.now()/1000) {
   };
 }
 function filtered() {
-  const rank=t=>state.connected&&t.status==="running"?2:state.filter==="recent"&&!t.unread?1:0;
+  const rank=t=>t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true)?2:state.filter==="recent"&&!t.unread?1:0;
   const sorted=(boardSets()[state.filter]||[]).sort((a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
   return projectGroups(sorted).flatMap(group=>group.cards);
 }
@@ -431,13 +601,27 @@ async function refresh(force=false) {
 function boardHeight(count,extra=0,groupCount=0) {
   return Math.min(420,Math.max(180,92+Math.max(1,count)*46+Math.min(groupCount,7)*18+extra));
 }
+function positionHealthPopover() {
+  const panel=$("runtimeHealth"),anchor=$("runtimeHealthToggle"),app=$("appShell");
+  if(!panel||panel.hidden||!anchor?.getBoundingClientRect||!app?.getBoundingClientRect)return;
+  const root=app.getBoundingClientRect(),button=anchor.getBoundingClientRect();
+  const width=panel.offsetWidth,center=button.left-root.left+button.width/2;
+  const left=Math.max(9,Math.min(root.width-width-11,center-width/2));
+  const top=button.bottom-root.top+9;
+  panel.style.left=left+"px";panel.style.top=top+"px";
+  panel.style.setProperty("--health-anchor-x",(center-left)+"px");
+  $("runtimeHealthBody").style.maxHeight=Math.max(48,Math.min(230,root.height-top-40))+"px";
+}
 function syncBoardSize(force=false,activate=true) {
   if(state.mode!=="compact")return;
-  const extra=($("systemBanner").hidden?0:$("systemBanner").offsetHeight)+(Number($("quotaDetails")?.offsetHeight)||0);
+  const bannerHeight=$("systemBanner").hidden?0:$("systemBanner").offsetHeight,quotaHeight=Number($("quotaDetails")?.offsetHeight)||0;
+  const health=$("runtimeHealth");
+  const extra=bannerHeight+quotaHeight;
   const cards=filtered();
-  const height=boardHeight(cards.length,extra,projectGroups(cards).length);
-  if(!force&&height===state.boardSize)return;
+  const height=Math.max(boardHeight(cards.length,extra,projectGroups(cards).length),health&&!health.hidden?300:0);
+  if(!force&&height===state.boardSize){positionHealthPopover();return;}
   state.boardSize=height;document.documentElement.style.setProperty("--board-height",height+"px");
+  positionHealthPopover();
   if(state.petMode)invokeDesktop("set_pet_view",{view:"compact",height,activate}).catch(()=>{});
 }
 function cancelAutoCollapse() {
@@ -577,7 +761,13 @@ function bind() {
   window.addEventListener("work-twin-window-focus",onWindowFocus);
   $("quotaCoinButton").onclick=refreshFromCoin;
   $("quotaResetToggle").onclick=()=>setQuotaResetExpanded($("quotaResetWindows").hidden);
-  $("resetCardDetails").ontoggle=()=>syncBoardSize();
+  $("resetCardDetails").ontoggle=()=>{if($("resetCardDetails").open)setHealthExpanded(false);syncBoardSize(false,false);};
+  $("runtimeHealthToggle").onclick=()=>setHealthExpanded($("runtimeHealth").hidden);
+  $("healthCloseButton").onclick=()=>setHealthExpanded(false);
+  document.addEventListener("pointerdown",event=>{if(!$("runtimeHealth").hidden&&!event.target.closest("#runtimeHealth, #runtimeHealthToggle"))setHealthExpanded(false);});
+  document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!$("runtimeHealth").hidden){setHealthExpanded(false);$("runtimeHealthToggle").focus();}});
+  $("healthCheckButton").onclick=()=>refreshDiagnostics(true);
+  window.addEventListener("resize",()=>syncBoardSize(false,false));
   if(window.WorkTwinReadPlay)state.readPlay=new window.WorkTwinReadPlay({
     getContext:()=>({connected:state.connected,mode:state.mode,filter:state.filter,unreadRemaining:boardSets().recent.filter(t=>displayStatus(t)==="unread").length}),
     celebrate:()=>playPetInteraction(["hello","nod","idle"],180),
@@ -627,8 +817,11 @@ async function init() {
   window.addEventListener("pagehide",stopHoverTracking);
   window.addEventListener("pagehide",stopQuotaCoinFeedback);
   window.addEventListener("pagehide",()=>state.readPlay?.dispose());
+  window.addEventListener("pagehide",stopDiagnostics);
   mode(state.petMode&&!state.pinned&&params.get("expanded")!=="1"?"collapsed":"compact");
   if(state.petMode&&window.__TAURI__?.core?.invoke)pollNativePointer();
+  refreshDiagnostics();
+  state.diagnosticsTimer=setInterval(refreshDiagnostics,5000);
   await refresh();
   document.documentElement.dataset.monkexBoot="ready";
   try{sessionStorage.removeItem("monkex-boot-retry");}catch{}

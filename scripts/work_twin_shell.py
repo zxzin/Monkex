@@ -62,6 +62,8 @@ class ShellRequestHandler(BaseHTTPRequestHandler):
         try:
             if path == "/api/health":
                 self._json(self.server.shell.health())
+            elif path == "/api/diagnostics":
+                self._json(self.server.shell.diagnostics())
             elif path == "/api/threads":
                 self._json(self.server.shell.list_threads())
             elif path == "/api/events":
@@ -86,6 +88,8 @@ class ShellRequestHandler(BaseHTTPRequestHandler):
             payload = self._body()
             if path == "/api/refresh":
                 self._json(self.server.shell.refresh_dashboard())
+            elif path == "/api/diagnostics/check":
+                self._json(self.server.shell.diagnostics(check=True, reset=payload.get("reset") is True))
             elif path.startswith("/api/threads/") and path.endswith("/ack"):
                 thread_id = unquote(path.removeprefix("/api/threads/").removesuffix("/ack")).strip("/")
                 self._json(self.server.shell.acknowledge_result(thread_id, str(payload.get("version") or "")))

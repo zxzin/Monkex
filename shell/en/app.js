@@ -10,6 +10,7 @@ const state = {
   petInteractionCooldownUntil: 0, boardSize: 0, autoCollapseTimer: null, hoverCollapseTimer: null,
   pointerInside: false, selectionRevision: 0, nativePointerInside: null,
   hoverExpandTimer: null, hoverPollTimer: null, hoverTrackingStopped: false, petDragging: false,
+  diagnostics: null, diagnosticsBusy: false, diagnosticsFailed: false, diagnosticsResetting: false, diagnosticsTimer: null, diagnosticsStopped: false,
 };
 const PET_POSES = new Set(["idle", "hello", "peek", "nod"]);
 
@@ -89,10 +90,12 @@ function node(tag, className, text) {
   return e;
 }
 function shortStatus(card) {
-  return {running:"Running",unread:"Completed",read:"Read"}[displayStatus(card)];
+  return {running:"Running",pending:"Pending sync",unread:"Completed",read:"Read"}[displayStatus(card)];
 }
 function displayStatus(card) {
-  return state.connected&&card.status==="running"?"running":card.unread?"unread":"read";
+  const running=card.status==="running";
+  if((running&&(!state.connected||card.sync_pending))||(card.status==="unknown"&&card.last_observed_status==="running"&&card.sync_pending))return "pending";
+  return running?"running":card.unread?"unread":"read";
 }
 function formatRate(value) {
   if(!Number.isFinite(value))return "—";
@@ -102,6 +105,19 @@ function formatRate(value) {
 }
 function rateText(tokens) {
   return state.connected&&tokens?.ready?formatRate(tokens.tokens_per_min)+" /min":"—";
+}
+function taskRunState(card,now=Date.now()/1000) {
+  const runtime=card.runtime||{},tokens=card.tokens||{};
+  if(displayStatus(card)==="pending"||runtime.observation_available===false)return {label:"Pending sync",hint:"Runtime records are pending sync; the last task state is retained"};
+  const age=Number.isFinite(runtime.activity_at)?now-runtime.activity_at:null;
+  const reportFresh=Number.isFinite(tokens.last_report_at)&&now-tokens.last_report_at<=60&&now-tokens.last_report_at>=-30;
+  if(reportFresh&&tokens.ready&&tokens.tokens_per_min>0)return {label:formatRate(tokens.tokens_per_min)+" t/min",hint:"Reported token usage over 60 seconds, including input, cache and output; this is a usage rate"};
+  if(runtime.pending_tools>0)return {label:age!==null&&age>=180?"Tool wait":"Tool call",hint:"A tool call has started without a completion record. Local Python and other tools may produce no new token reports"};
+  if(age!==null&&age>=180)return {label:"Unconfirmed",hint:"No new activity for a while; the task may be reasoning or waiting. Check the original conversation"};
+  if(runtime.phase==="starting")return {label:"Awaiting response",hint:"The turn has started; no first model or tool activity has been observed"};
+  if(runtime.phase==="thinking")return {label:"Reasoning",hint:"The latest record is reasoning activity; usage reporting may lag"};
+  if(runtime.phase==="response")return {label:"Output",hint:"The latest record is output activity; usage reporting may lag"};
+  return {label:"Awaiting report",hint:"No new token reports in 60 seconds; this is not a progress percentage or evidence the task stopped"};
 }
 function fanPeriod(rate) {
   return Number.isFinite(rate)&&rate>0?Math.max(.55,4/(1+Math.sqrt(rate/30000))):0;
@@ -144,10 +160,10 @@ function updateTaskRow(button,card) {
   title.append(node("span","row-status",shortStatus(card)));
   const meta=node("div","task-meta"),progress=node("span","stage",card.summary||card.project_label||"Task");
   progress.title=card.summary?"Latest progress · "+card.summary:"";meta.append(progress);
-  if(status==="running"){
-    const speed=node("span","row-rate");speed.title="This task · Token usage over the last 60 seconds, including input and output";
-    const fan=node("span","token-fan mini-fan");renderTokenFan(fan,card.tokens,true);
-    speed.append(fan,node("span","",rateText(card.tokens)));meta.append(speed);
+  if(status==="running"||status==="pending"){
+    const observed=taskRunState(card),speed=node("span","row-rate");speed.title=observed.hint;
+    const measured=observed.label.includes("t/min"),fan=node("span","token-fan mini-fan");renderTokenFan(fan,measured?card.tokens:null,status==="running"&&measured);
+    speed.append(fan,node("span","",observed.label));meta.append(speed);
   }else meta.append(node("time","",relativeTime(activityTime(card))));
   copy.append(title,meta);button.replaceChildren(icon,copy);
 }
@@ -257,9 +273,16 @@ function quotaCountdown(timestamp,now=Date.now()/1000) {
   return Math.floor(minutes/1440)+" d "+Math.floor(minutes%1440/60)+" hr left";
 }
 function setQuotaResetExpanded(expanded) {
+  if(expanded&&$("runtimeHealth"))setHealthExpanded(false);
   $("quotaResetWindows").hidden=!expanded;
   $("quotaResetToggle").setAttribute("aria-expanded",String(expanded));
   $("quotaResetToggle").title=expanded?"Hide quota reset times":"Show quota reset times";
+  syncBoardSize(false,false);
+}
+function setHealthExpanded(expanded) {
+  $("runtimeHealth").hidden=!expanded;
+  $("runtimeHealthToggle").setAttribute("aria-expanded",String(expanded));
+  if(expanded){$("resetCardDetails").open=false;setQuotaResetExpanded(false);}
   syncBoardSize(false,false);
 }
 function renderQuotaDetails(now=Date.now()/1000) {
@@ -321,13 +344,160 @@ function renderQuotaFlow(element,cards,quota) {
   const description=rate>0?' · Total token rate over the last 60 seconds: '+Math.round(rate).toLocaleString()+' /min · Slow coin rotation indicates activity, not per-coin billing':' · No recent token usage observed';
   element.title+=description;
 }
+function healthAge(seconds) {
+  if(!Number.isFinite(seconds)||seconds<0)return "Unknown";
+  if(seconds<60)return Math.floor(seconds)+" s ago";
+  if(seconds<3600)return Math.floor(seconds/60)+" min ago";
+  return Math.floor(seconds/3600)+" hr ago";
+}
+function healthTime(timestamp) {
+  if(!Number.isFinite(timestamp)||timestamp<=0)return "Not checked";
+  return new Date(timestamp*1000).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+function healthPhase(phase) {
+  return {thinking:"Reasoning",tool:"Tool activity",response:"Output",waiting:"Waiting",starting:"Starting",unknown:"Type unknown"}[phase]||"Type unknown";
+}
+function healthNetworkText(check) {
+  if(!check)return "Not checked";
+  const labels={reachable:"Reachable",slow:"Slow",http_error:"HTTP response",timeout:"Timed out",dns_error:"DNS failed",tls_error:"TLS failed",unreachable:"Failed"};
+  const label=labels[check.state]||"Unknown";
+  const latency=Number.isFinite(check.latency_ms)?Math.round(check.latency_ms)+" ms":"";
+  return label+(latency?" · "+latency:"")+(check.state==="http_error"&&Number.isInteger(check.http_status)?" · "+check.http_status:"");
+}
+function renderOperationalHealth(data,now) {
+  const fresh=!state.diagnosticsFailed&&data?.data_state==="current"&&Number.isFinite(data?.observed_at)&&now-data.observed_at<=30&&now-data.observed_at>=-30;
+  const value=fresh?data?.operational:null;
+  const states={active:["Active","ok"],tool_running:["Tool call","ok"],quiet:["Unconfirmed","notice"],waiting:["Awaiting response","notice"],error:["Issue","warning"],unknown:["Unconfirmed","unknown"],idle:["Idle","unknown"]};
+  const selected=states[value?.state]||states.unknown;
+  let [label,level]=selected;
+  if(value?.state==="tool_running"&&value.level!=="ok"){label="Tool wait";level="notice";}
+  const reasons={active:"Recent task activity was observed.",tool_running:"A tool call was observed; awaiting its completion record.",tool_wait:"Some tools have not returned for a while. Check the original conversation; continued execution is unconfirmed.",quiet:"Some tasks have had no new activity for a while. Check their original conversations.",awaiting_response:"Tasks have started; their first model or tool response has not been observed.",recent_connection_error:"A recent turn recorded a connection failure. Check the original conversation; no reconnect was performed here.",recent_task_error:"A recent turn recorded an execution error. Check the original conversation for its cause.",activity_unconfirmed:"Some task records are unavailable; waiting for confirmation.",sync_unavailable:"Runtime records are pending sync; previous task cards are retained.",idle:"No tasks are running; check the connection when needed."};
+  const reason=reasons[value?.code]||reasons.sync_unavailable;
+  const affected=Number.isInteger(value?.affected_tasks)&&value.affected_tasks>0?value.affected_tasks:0;
+  $("healthSummary").textContent=label;
+  $("healthSummary").title=reason;
+  $("healthOperationalReason").textContent=(affected?affected+" tasks · ":"")+reason;
+  $("runtimeHealth").dataset.level=level;
+  const badge=$("runtimeHealthToggle");badge.dataset.level=level;
+  badge.dataset.checking=String(Boolean(state.diagnosticsResetting||data?.network?.checking));
+  const alert=$("healthRuntimeAlert");alert.dataset.level=level;
+  alert.hidden=level==="ok"||value?.state==="idle";
+  const scoreLabel="Public connection · "+$("healthScoreValue").textContent;
+  badge.setAttribute("aria-label",scoreLabel+" · Codex health · "+label);
+  badge.title=scoreLabel+"\n"+"Codex health · "+label+"\n"+reason;
+}
+function renderHealthScore(data,now=Date.now()/1000) {
+  const score=data?.score||{},network=data?.network||{};
+  const current=!state.diagnosticsFailed&&!state.diagnosticsResetting&&Number.isFinite(data?.observed_at)&&now-data.observed_at<=30&&now-data.observed_at>=-30;
+  const stale=!state.diagnosticsResetting&&(score.grade==="stale"||(network.stale===true&&Number.isFinite(network.checked_at)));
+  const valid=current&&!stale&&["good","fair","poor"].includes(score.grade)&&Number.isFinite(score.value)&&score.value>=0&&score.value<=100;
+  const grade=stale?"stale":valid?score.grade:"collecting";
+  const confidence=valid?{provisional:"Preliminary",short_check:"Short check"}[score.confidence]||"Preliminary":stale?"Retest needed":current||state.diagnosticsResetting?"Sampling":"Pending sync";
+  $("healthScoreValue").textContent=valid?Math.round(score.value)+" /100":"—";
+  $("healthBadgeValue").textContent=valid?String(Math.round(score.value)):"—";
+  $("runtimeHealthToggle").dataset.scoreLevel=valid?{good:"ok",fair:"notice",poor:"warning"}[score.grade]:"unknown";
+  $("healthScoreValue").title="Score from public-path samples; verify actual Codex responses through tasks.";
+  $("healthConnectionConfidence").textContent=confidence;
+  const reasons={good:"The current path looks responsive. Continue observing actual task progress.",fair:"The current path has delay or jitter. Compare a short check after switching nodes.",poor:"The current path has frequent failures or jitter. Switch nodes and retest.",collecting:"Building a baseline for this node. Several rounds are needed before scoring.",stale:"These samples have expired. Retest the current node."};
+  const noteLabels={partial_coverage:"Service coverage is incomplete.",insufficient_rounds:"More independent rounds are needed.",runtime_unconfirmed:"Actual Codex responses remain unverified.",runtime_quiet:"Some running tasks have no recent activity.",missing_latency:"Latency data is insufficient.",failed_latency_floor:"Failed requests are included in latency scoring.",http_restricted:"The endpoint restricts access. Use this as a path reference.",unexpected_response:"The endpoint returned an unexpected response.",service_failures:"Some service connection checks failed.",codex_recent_failures:"Recent Codex path checks failed.",official_codex_degraded:"Official status reports degraded Codex performance.",official_codex_outage:"Official status reports a Codex outage.",official_other_notice:"Official status reports issues in other services.",official_status_unknown:"Official status is unavailable.",short_check_only:"A short check reflects this moment. Keep observing."};
+  const notes=Array.isArray(score.notes)?score.notes:[];
+  const priority=["official_codex_outage","official_codex_degraded","codex_recent_failures","service_failures","http_restricted","unexpected_response","partial_coverage","insufficient_rounds","missing_latency","runtime_quiet","runtime_unconfirmed","official_status_unknown"];
+  const reasonCode=priority.find(code=>notes.includes(code));
+  $("healthScoreReason").textContent=(current||state.diagnosticsResetting||stale?reasons[grade]:"Reading the current path score…")+(current&&reasonCode?" "+noteLabels[reasonCode]:"");
+  const count=Number.isInteger(score.sample_count)&&score.sample_count>=0?score.sample_count:0;
+  const rounds=Number.isInteger(network.rounds_completed)?network.rounds_completed:Number.isInteger(score.round_count)?score.round_count:0;
+  const planned=Number.isInteger(network.rounds_planned)&&network.rounds_planned>0?network.rounds_planned:6;
+  const progress=state.diagnosticsResetting?"Starting a fresh sample session":"Public path · "+rounds+"/"+planned+" rounds · "+count+" samples";
+  $("healthScoreProgress").textContent=progress+(network.node_changed_at?" · Samples reset":"");
+  $("healthScoreProgress").title=notes.map(code=>noteLabels[code]).filter(Boolean).join("\n");
+  $("healthRouteNote").hidden=!(network.exit_observed===false&&Number.isFinite(network.checked_at));
+  $("healthRouteNote").textContent="Exit unconfirmed. Retest after switching nodes.";
+  if(score.components&&valid)$("healthScoreValue").title+="\n"+"Reliability "+formatRate(score.components.reliability)+"/60 · "+"Latency "+formatRate(score.components.latency)+"/25 · "+"Stability "+formatRate(score.components.stability)+"/15";
+  for(const [key,id,suffix]of [["success_percent","healthSuccessRate","%"],["p50_ms","healthP50"," ms"],["p95_ms","healthP95"," ms"],["jitter_ms","healthJitter"," ms"]]){
+    $(id).textContent=current&&!stale&&Number.isFinite(score[key])?Math.round(score[key])+suffix:"—";
+  }
+}
+function renderDiagnostics(now=Date.now()/1000) {
+  const panel=$("runtimeHealth");if(!panel)return;
+  const data=state.diagnostics,activity=data?.activity||{},assessment=data?.assessment||{};
+  const fresh=!state.diagnosticsFailed&&data?.data_state==="current"&&Number.isFinite(data?.observed_at)&&now-data.observed_at<=30&&now-data.observed_at>=-30;
+  renderHealthScore(data,now);
+  renderOperationalHealth(data,now);
+  const explanations={sync_unavailable:"Activity data is unavailable. Wait for sync before assessing progress.",idle:"No tasks are running. You can check the connection on demand.",network_unavailable:"Public connection checks failed. Check the network or proxy and retry.",openai_path:"Public internet is reachable; the OpenAI path is slow or failed. Try another route and recheck.",connection_slow:"This public connection check was slow. Recheck and compare task activity.",reference_path:"The public reference check failed; the OpenAI path is reachable. Check again to compare.",endpoint_response:"The connection succeeded, but the public endpoint returned an HTTP restriction or error. Check its status code; this result describes only the probe endpoint.",service_notice:"The official status reports a disruption that may affect some tasks.",quiet:"Some tasks have been quiet for a while. Compare connection checks and official status.",active:"Recent activity detected. Compare output reports and task events to assess progress.",waiting:"Running tasks have no new reports yet. They may be reasoning, using tools or awaiting a response."};
+  Object.assign(explanations,{tool_running:"Tool calls are pending. Their execution may produce no new tokens.",tool_wait:"Some tools have not returned for a while; check the original conversation.",awaiting_response:"Tasks started; waiting for the first response.",activity_unconfirmed:"Some task records are pending sync.",recent_connection_error:"A recent turn recorded a connection failure.",recent_task_error:"A recent turn recorded an execution error."});
+  const output=fresh&&Number.isFinite(activity.output_tokens_per_min)?activity.output_tokens_per_min:null;
+  $("healthAssessment").textContent=fresh?(explanations[assessment.code]||explanations.waiting):explanations.sync_unavailable;
+  $("healthTotalRate").textContent=fresh?formatRate(activity.total_tokens_per_min):"—";
+  $("healthOutputRate").textContent=output===null?"—":formatRate(output);
+  $("healthOutputRate").title=output===0?"No output report in the last 60 seconds. Reasoning or tool activity may still be ongoing.":"Output tokens reported in the last 60 seconds. Reports may arrive late.";
+  const activityAge=Number.isFinite(activity.last_activity_at)?Math.max(0,now-activity.last_activity_at):null;
+  $("healthLastActivity").textContent=fresh?"Last activity "+healthAge(activityAge)+" · "+(Number.isInteger(data.running_tasks)?data.running_tasks:0)+" running":"Activity pending sync";
+  const network=data?.network||{},checks=!state.diagnosticsResetting&&Array.isArray(network.checks)?network.checks:[];
+  for(const [id,target]of [["general","healthGeneralNetwork"],["codex","healthCodexNetwork"],["api","healthAPINetwork"],["auth","healthAuthNetwork"]]){
+    const check=checks.find(item=>item.id===id),element=$(target);
+    element.textContent=healthNetworkText(check)+(network.stale&&check?" · Old data":"");
+    element.dataset.state=check?.state||"unknown";
+    element.title=check?"Recent median "+(Number.isFinite(check.median_ms)?Math.round(check.median_ms)+" ms":"Unknown")+" · Baseline "+(Number.isFinite(check.baseline_ms)?Math.round(check.baseline_ms)+" ms":"Unknown")+" · Consecutive failures "+(Number.isInteger(check.failure_streak)?check.failure_streak:0):"Not checked";
+  }
+  const official=data?.official||{},incidents=Array.isArray(official.incidents)?official.incidents:[],components=Array.isArray(official.components)?official.components:[];
+  const officialState={operational:"Official: no known issue",degraded:"Official: disruption reported",unknown:"Official status unavailable"}[official.state]||"Official status not checked";
+  $("healthOfficial").textContent=officialState+(official.stale?" · Old data":"")+(incidents.length?" · "+String(incidents[0].name||""):"");
+  $("healthOfficial").title=components.map(item=>String(item.name)+": "+String(item.status)).join("\n")+(official.checked_at?"\n"+"Checked "+healthTime(official.checked_at):"");
+  const componentStates={operational:"Operational",degraded_performance:"Degraded",partial_outage:"Partial outage",major_outage:"Outage",under_maintenance:"Maintenance"};
+  $("healthOfficialComponents").hidden=!components.length;
+  $("healthOfficialComponents").textContent=components.map(item=>String(item.name)+" · "+(componentStates[item.status]||"Status unknown")).join(" / ");
+  $("healthCheckTime").textContent=network.blocked?"Check timed out. Waiting for the system connection to finish before retrying.":state.diagnosticsResetting||network.checking?"Checking connection…":network.checked_at?"Checked "+healthTime(network.checked_at)+(network.stale?" · Old data":""):"Connection not checked";
+  $("healthCheckTime").title=network.route==="system_proxy"?"Checks use the system proxy; Codex may use a different route.":"Checks use the current system route, which may pass through a VPN tunnel.";
+  $("healthCheckButton").disabled=Boolean(state.diagnosticsBusy||network.checking||network.blocked);
+  $("healthCheckButton").setAttribute("aria-busy",String(Boolean(state.diagnosticsBusy||network.checking)));
+  const tasks=Array.isArray(data?.tasks)?data.tasks:[],issues=fresh&&Array.isArray(data?.recent_issues)?data.recent_issues:[],list=$("healthTaskList"),scroll=list.scrollTop;
+  $("healthTaskSummary").textContent="Task activity · "+tasks.length+(fresh&&activity.quiet_tasks>0?" · "+activity.quiet_tasks+" quiet":"");
+  list.replaceChildren();
+  for(const task of tasks){
+    const row=node("li","health-task"),title=node("div","health-task-title");
+    const name=node("strong","",String(task.name||"Task"));name.title=String(task.name||"Task");
+    title.append(name,node("span","",fresh?healthAge(task.activity_age_seconds):"Pending sync"));
+    row.dataset.signal=fresh?String(task.signal||"unknown"):"unknown";
+    const meta=node("p","",healthPhase(task.phase)+" · "+"Out rpt. "+(fresh?formatRate(task.output_tokens_per_min):"—")+"/min");
+    meta.title=[task.model,task.effort].filter(value=>typeof value==="string").join(" · ")+" · "+"Last report "+healthAge(task.report_age_seconds);
+    row.append(title,meta);list.append(row);
+  }
+  for(const issue of issues){
+    const row=node("li","health-task"),title=node("div","health-task-title");
+    title.append(node("strong","",String(issue.name||"Task")),node("span","",healthAge(issue.age_seconds)));
+    row.dataset.signal="quiet";
+    row.append(title,node("p","",issue.code==="http_connection_failed"?"Recent turn connection failure":"Recent turn execution error"));list.append(row);
+  }
+  if(!tasks.length&&!issues.length)list.append(node("li","health-no-tasks",fresh?"No running tasks":"Activity pending sync"));
+  list.scrollTop=scroll;syncBoardSize(false,false);
+}
+async function refreshDiagnostics(check=false) {
+  if(state.diagnosticsBusy||state.diagnosticsStopped)return;
+  state.diagnosticsBusy=true;state.diagnosticsResetting=check;renderDiagnostics();
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
+  try{
+    const response=await fetch(check?"/api/diagnostics/check":"/api/diagnostics",{cache:"no-store",signal:controller.signal,...(check?{method:"POST",headers:{"Content-Type":"application/json","X-Work-Twin":"1"},body:JSON.stringify({reset:true})}:{})});
+    if(!response.ok)throw Error("Activity checks are unavailable. Please retry shortly.");
+    const data=await response.json();
+    if(!data||!Number.isFinite(data.observed_at)||!data.activity)throw Error("Activity checks are unavailable. Please retry shortly.");
+    state.diagnostics=data;state.diagnosticsFailed=false;$("healthCheckError").hidden=true;
+  }catch(error){
+    state.diagnosticsFailed=true;
+    if(check){$("healthCheckError").textContent="Activity checks are unavailable. Please retry shortly.";$("healthCheckError").hidden=false;}
+  }finally{
+    clearTimeout(timeout);state.diagnosticsBusy=false;state.diagnosticsResetting=false;renderDiagnostics();
+  }
+}
+function stopDiagnostics() {
+  state.diagnosticsStopped=true;clearInterval(state.diagnosticsTimer);
+}
 function activityTime(card) {
   const seconds=value=>typeof value==="number"?value:typeof value==="string"?Date.parse(value)/1000:NaN;
   const times=[seconds(card.updated_at),seconds(card.runtime_observed_at)].filter(t=>Number.isFinite(t)&&t>0);
   return times.length?Math.max(...times):0;
 }
 function boardSets(now=Date.now()/1000) {
-  const active=t=>state.connected&&t.status==="running";
+  const active=t=>t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true);
   const age=t=>activityTime(t)?Math.max(0,now-activityTime(t)):Infinity;
   const recent=state.threads.filter(t=>active(t)||age(t)<=86400);
   return {
@@ -337,7 +507,7 @@ function boardSets(now=Date.now()/1000) {
   };
 }
 function filtered() {
-  const rank=t=>state.connected&&t.status==="running"?2:state.filter==="recent"&&!t.unread?1:0;
+  const rank=t=>t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true)?2:state.filter==="recent"&&!t.unread?1:0;
   const sorted=(boardSets()[state.filter]||[]).sort((a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
   return projectGroups(sorted).flatMap(group=>group.cards);
 }
@@ -433,13 +603,27 @@ async function refresh(force=false) {
 function boardHeight(count,extra=0,groupCount=0) {
   return Math.min(420,Math.max(180,92+Math.max(1,count)*46+Math.min(groupCount,7)*18+extra));
 }
+function positionHealthPopover() {
+  const panel=$("runtimeHealth"),anchor=$("runtimeHealthToggle"),app=$("appShell");
+  if(!panel||panel.hidden||!anchor?.getBoundingClientRect||!app?.getBoundingClientRect)return;
+  const root=app.getBoundingClientRect(),button=anchor.getBoundingClientRect();
+  const width=panel.offsetWidth,center=button.left-root.left+button.width/2;
+  const left=Math.max(9,Math.min(root.width-width-11,center-width/2));
+  const top=button.bottom-root.top+9;
+  panel.style.left=left+"px";panel.style.top=top+"px";
+  panel.style.setProperty("--health-anchor-x",(center-left)+"px");
+  $("runtimeHealthBody").style.maxHeight=Math.max(48,Math.min(230,root.height-top-40))+"px";
+}
 function syncBoardSize(force=false,activate=true) {
   if(state.mode!=="compact")return;
-  const extra=($("systemBanner").hidden?0:$("systemBanner").offsetHeight)+(Number($("quotaDetails")?.offsetHeight)||0);
+  const bannerHeight=$("systemBanner").hidden?0:$("systemBanner").offsetHeight,quotaHeight=Number($("quotaDetails")?.offsetHeight)||0;
+  const health=$("runtimeHealth");
+  const extra=bannerHeight+quotaHeight;
   const cards=filtered();
-  const height=boardHeight(cards.length,extra,projectGroups(cards).length);
-  if(!force&&height===state.boardSize)return;
+  const height=Math.max(boardHeight(cards.length,extra,projectGroups(cards).length),health&&!health.hidden?300:0);
+  if(!force&&height===state.boardSize){positionHealthPopover();return;}
   state.boardSize=height;document.documentElement.style.setProperty("--board-height",height+"px");
+  positionHealthPopover();
   if(state.petMode)invokeDesktop("set_pet_view",{view:"compact",height,activate}).catch(()=>{});
 }
 function cancelAutoCollapse() {
@@ -579,7 +763,13 @@ function bind() {
   window.addEventListener("work-twin-window-focus",onWindowFocus);
   $("quotaCoinButton").onclick=refreshFromCoin;
   $("quotaResetToggle").onclick=()=>setQuotaResetExpanded($("quotaResetWindows").hidden);
-  $("resetCardDetails").ontoggle=()=>syncBoardSize();
+  $("resetCardDetails").ontoggle=()=>{if($("resetCardDetails").open)setHealthExpanded(false);syncBoardSize(false,false);};
+  $("runtimeHealthToggle").onclick=()=>setHealthExpanded($("runtimeHealth").hidden);
+  $("healthCloseButton").onclick=()=>setHealthExpanded(false);
+  document.addEventListener("pointerdown",event=>{if(!$("runtimeHealth").hidden&&!event.target.closest("#runtimeHealth, #runtimeHealthToggle"))setHealthExpanded(false);});
+  document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!$("runtimeHealth").hidden){setHealthExpanded(false);$("runtimeHealthToggle").focus();}});
+  $("healthCheckButton").onclick=()=>refreshDiagnostics(true);
+  window.addEventListener("resize",()=>syncBoardSize(false,false));
   if(window.WorkTwinReadPlay)state.readPlay=new window.WorkTwinReadPlay({
     getContext:()=>({connected:state.connected,mode:state.mode,filter:state.filter,unreadRemaining:boardSets().recent.filter(t=>displayStatus(t)==="unread").length}),
     celebrate:()=>playPetInteraction(["hello","nod","idle"],180),
@@ -629,8 +819,11 @@ async function init() {
   window.addEventListener("pagehide",stopHoverTracking);
   window.addEventListener("pagehide",stopQuotaCoinFeedback);
   window.addEventListener("pagehide",()=>state.readPlay?.dispose());
+  window.addEventListener("pagehide",stopDiagnostics);
   mode(state.petMode&&!state.pinned&&params.get("expanded")!=="1"?"collapsed":"compact");
   if(state.petMode&&window.__TAURI__?.core?.invoke)pollNativePointer();
+  refreshDiagnostics();
+  state.diagnosticsTimer=setInterval(refreshDiagnostics,5000);
   await refresh();
   document.documentElement.dataset.monkexBoot="ready";
   try{sessionStorage.removeItem("monkex-boot-retry");}catch{}

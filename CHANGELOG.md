@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — 2026-10-23
+
+- Add a compact pixel-heart indicator left of weekly quota. Its 13px numeric reading shows public-connection quality out of 100, with a visible Link label and a separate runtime alert. Task activity, waiting, quiet/unknown evidence and recent structured errors remain independent in its anchored popover; high public scores preserve operational warnings.
+- Show fresh reported Token usage or an evidence-based phase on running cards. Tool waits, first-response waits and missing reports remain distinct; rate values measure reported usage, including input/cache/output, rather than completion progress.
+- Preserve known running cards as Pending sync through transient API, observer and event-feed failures. Retain anchored long-running turns until a matching terminal event; newer completions and explicit archive/deletion take precedence. Recover temporary history-pagination gaps without resurrecting completed turns.
+- Keep delayed tool records inside their original lifecycle. Cold-start log tails retain unknown start times; explicit start events establish a new running turn, so a late old tool completion cannot revive an ended task.
+- Bind runtime diagnostics to the current turn with an atomic activity/usage snapshot. New turns clear prior activity and establish their own usage baseline; missing or mismatched identities show unknown with old metadata hidden. Thread/project rolling usage keeps its existing cross-turn window.
+- Compare small public HTTPS checks with official OpenAI component notices. Checks run off the task-refresh path, have bounded concurrency and freshness, and preserve HTTP restrictions separately from transport failures. Probe timing describes public connectivity; individual model throughput and VPN/server causality remain unconfirmed.
+- Keep diagnostic metadata in memory and document destinations, interpretation, sampling and privacy in [Runtime Health](docs/RUNTIME_HEALTH.md).
+
 ## Unreleased — 2026-10-21
 
 - Integrate quota into the compact toolbar with an 18px banana coin. Reset times start collapsed and toggle independently from coin refresh; background sync preserves disclosure state. Keep balance, nearest expiry and reset-card count in one quiet summary, with the expiry placed left of the count and full expiry details in a bounded three-column disclosure.
