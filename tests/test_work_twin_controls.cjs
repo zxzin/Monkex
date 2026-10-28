@@ -44,7 +44,7 @@ for(const removed of ['boardSettings','playFeedbackToggle','setSettings'])assert
 assert.match(html,/<div id="greetMonkey"/,'avatar is a display and weekly counter without an empty menu');
 const elements=new Map(),styles={},timers=new Map(),modes=[],writes=[],calls=[];let timerId=0;
 const $=id=>{if(!elements.has(id))elements.set(id,{hidden:true,value:'',offsetHeight:id==='systemBanner'?112:id==='quotaDetails'?80:0,focus(){this.focused=true;},setAttribute(k,v){this[k]=v;}});return elements.get(id);};
-const state={mode:'compact',petMode:true,pinned:false,boardSize:0,selectionRevision:0,autoCollapseTimer:null,hoverCollapseTimer:null,pointerInside:false,navigation:{pending:null,navigate:async()=>true}};
+const state={threads:[],mode:'compact',petMode:true,pinned:false,boardSize:0,selectionRevision:0,autoCollapseTimer:null,hoverCollapseTimer:null,pointerInside:false,navigation:{pending:null,navigate:async()=>true}};
 const ctx={state,$,clearTimeout:id=>timers.delete(id),setTimeout:(fn,ms)=>{timers.set(++timerId,{fn,ms});return timerId;},
   document:{documentElement:{style:{setProperty:(k,v)=>styles[k]=v}}},localStorage:{setItem:(...args)=>writes.push(args)},
   filtered:()=>Array.from({length:3}),projectGroups:cards=>[{cards}],renderList(){},mode:value=>{state.mode=value;modes.push(value);},

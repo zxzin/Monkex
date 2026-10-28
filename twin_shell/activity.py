@@ -9,6 +9,7 @@ from typing import Any
 from .task_view import describe
 from .runtime_observer import apply_runtime
 from .token_meter import aggregate_project_tokens
+from .input_requests import InputRequests, unknown_input
 
 
 SOURCES = ["cli", "vscode", "exec", "appServer", "unknown"]
@@ -35,6 +36,17 @@ class ActivityFeed:
             evidence = self.shell.runtime_observer.snapshot(card["id"])
             if evidence.get("turn_id") and evidence["turn_id"] == card.get("latest_turn_id"):
                 runtime.update({key: evidence[key] for key in runtime if key in evidence})
+                card["input_request"] = deepcopy(evidence.get("input_request") or unknown_input(turn_id=card.get("latest_turn_id")))
+            else:
+                card["input_request"] = unknown_input(turn_id=card.get("latest_turn_id"))
+        if card.get("sync_pending") and isinstance(card.get("input_request"), dict):
+            card["input_request"]["available"] = False
+        if (card.get("status") in {"completed", "result_ready", "waiting_user", "failed", "interrupted"}
+                and (card.get("latest_turn_completed_at") or card.get("result_is_latest")
+                     or card.get("latest_turn_status") in {"completed", "failed"})):
+            # A confirmed API terminal can arrive before its rollout envelope.
+            card["input_request"] = InputRequests(complete=True).snapshot(
+                turn_id=card.get("latest_turn_id"), observed_at=time.time(), active=False)
         card["runtime"] = runtime
         card["project_tokens"] = deepcopy(self.project_tokens.get(card.get("cwd")))
 
@@ -66,6 +78,12 @@ class ActivityFeed:
         card["updated_at"] = self.metadata.get(thread_id, {}).get("updatedAt") or card["updated_at"]
         if observer:
             apply_runtime(card, evidence)
+            if latest.get("id") == card.get("latest_turn_id"):
+                observer.observe_input_items(thread_id, latest["id"], latest.get("items"))
+        else:
+            card["input_request"] = InputRequests.from_items(latest.get("items")).snapshot(
+                turn_id=card.get("latest_turn_id"), observed_at=time.time(),
+                active=card.get("status") == "running" or latest.get("status") == "inProgress")
         self.telemetry(card)
         self.observe(card)
         payload = {"thread": shell._present_thread(raw), "card": card, "shell": deepcopy(shell._state["tasks"].get(thread_id)), "runtime_revision": evidence.get("revision")}
@@ -203,6 +221,7 @@ class ActivityFeed:
                         self.observe(card)
                         return card
             card = describe(raw, [], owned=False)
+            card["input_request"] = unknown_input()
             card.update({"id": thread_id, "name": raw.get("name") or "未命名任务", "cwd": raw.get("cwd"), "updated_at": raw.get("updatedAt"), "owned_by_shell": False, "unread": False})
             if shell.runtime_observer:
                 apply_runtime(card, shell.runtime_observer.snapshot(thread_id))

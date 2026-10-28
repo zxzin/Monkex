@@ -1,7 +1,7 @@
 """Read-only runtime evidence and small, credential-free public HTTPS probes.
 
 The probes measure this process's public HTTPS path. They cannot measure model
-decoding, identify a VPN, or establish the cause of an individual slow turn.
+decoding, identify a VPN's selected server, or establish a slow turn's cause.
 All history is bounded and memory-only; requests use fixed public destinations.
 """
 from __future__ import annotations
@@ -13,6 +13,7 @@ import hashlib
 import ipaddress
 import math
 import os
+import re
 import socket
 import ssl
 import statistics
@@ -23,6 +24,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 
 from .health_score import score_runtime_health
+from .input_requests import pending_input
 
 PROBES = {"general": "https://www.microsoft.com/favicon.ico",
           "codex": "https://chatgpt.com/backend-api/codex/responses",
@@ -63,6 +65,32 @@ def _error_kind(error):
     return "unreachable"
 
 
+def _trace_observation(content):
+    """Keep only a salted exit identity and strict public country/edge codes."""
+    if len(content) > 4096:
+        return {}
+    fields = {}
+    for line in content.decode("utf-8", "replace").splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key in {"ip", "loc", "colo"}:
+            if key in fields:
+                return {}
+            fields[key] = value
+    try:
+        # Remove the raw address from parsed fields at validation. Only this
+        # process-salted digest survives the bounded response parser.
+        fingerprint = hashlib.sha256(_ROUTE_SALT + str(ipaddress.ip_address(fields.pop("ip", ""))).encode()).hexdigest()
+    except ValueError:
+        return {}
+    return {"route_fingerprint": fingerprint,
+            "country_code": fields.get("loc") if re.fullmatch(r"[A-Z]{2}", fields.get("loc", "")) else None,
+            "edge_code": fields.get("colo") if re.fullmatch(r"[A-Z]{3}", fields.get("colo", "")) else None}
+
+
+def _empty_exit(state="unknown", checked_at=None):
+    return {"state": state, "country_code": None, "edge_code": None, "checked_at": checked_at}
+
+
 def public_request(url, *, json_body=False, trace_body=False):
     """Measure HTTPS response headers; bound reads and never retain error text."""
     started = time.monotonic()
@@ -81,16 +109,7 @@ def public_request(url, *, json_body=False, trace_body=False):
                     return {"state": "invalid_response", "latency_ms": latency, "http_status": status}
                 result["body"] = json.loads(content)
             elif trace_body:
-                content = response.read(4097)
-                if len(content) <= 4096:
-                    fields = dict(line.split("=", 1) for line in content.decode("utf-8", "replace").splitlines() if "=" in line)
-                    try:
-                        address = str(ipaddress.ip_address(fields.get("ip", "")))
-                        # Discard the address immediately; the process-salted
-                        # fingerprint only detects an exit change in memory.
-                        result["route_fingerprint"] = hashlib.sha256(_ROUTE_SALT + address.encode()).hexdigest()
-                    except ValueError:
-                        pass
+                result.update(_trace_observation(response.read(4097)))
             return result
     except HTTPError as error:
         code = error.code
@@ -147,7 +166,7 @@ class ConnectionMonitor:
         self._pending_workers = []
         self._history = deque(maxlen=300)
         self._route_fingerprint = None
-        self._exit_observed = False
+        self._exit = _empty_exit()
         self._route_generation = 1
         self._node_changed_at = None
         self._round_id = 0
@@ -185,7 +204,7 @@ class ConnectionMonitor:
         self._samples = {key: deque(maxlen=10) for key in PROBES}
         self._failures = {key: 0 for key in PROBES}
         self._checks, self._checked_at = [], None
-        self._exit_observed = False
+        self._exit = _empty_exit()
         self._route_generation += 1
         self._node_changed_at = now
 
@@ -235,13 +254,17 @@ class ConnectionMonitor:
             with self._lock:
                 self._pending_workers = [worker for worker in workers if worker.is_alive()]
             now = self.clock()
-            fingerprint = (collected.get("trace") or {}).get("route_fingerprint")
+            trace = collected.get("trace") or {}
+            fingerprint = trace.get("route_fingerprint")
+            exit_info = _empty_exit(checked_at=now)
+            if fingerprint:
+                exit_info.update(state="observed",
+                                 country_code=trace.get("country_code"), edge_code=trace.get("edge_code"))
             with self._lock:
                 if fingerprint and self._route_fingerprint and fingerprint != self._route_fingerprint:
                     self._reset_samples(now)
                 if fingerprint:
                     self._route_fingerprint = fingerprint
-                self._exit_observed = bool(fingerprint)
                 self._round_id += 1
                 round_id = self._round_id
             checks = []
@@ -279,6 +302,7 @@ class ConnectionMonitor:
             with self._lock:
                 if not self._closed:
                     self._checks, self._checked_at = checks, now
+                    self._exit = exit_info
                     if include_official:
                         self._official = official
                     self._route = "system_proxy" if proxy_present else "direct_or_tunnel"
@@ -289,12 +313,17 @@ class ConnectionMonitor:
         now = self.clock()
         with self._lock:
             age = _age(self._checked_at, now)
+            stale = age is None or age > CHECK_TTL
+            exit_info = deepcopy(self._exit)
+            if stale and self._checked_at is not None:
+                exit_info = _empty_exit("stale", exit_info["checked_at"])
             network = {"checking": self._checking, "checked_at": self._checked_at,
                        "blocked": any(worker.is_alive() for worker in self._pending_workers),
                        "route_generation": self._route_generation, "node_changed_at": self._node_changed_at,
-                       "exit_observed": self._exit_observed and age is not None and age <= CHECK_TTL,
+                       "exit_observed": exit_info["state"] == "observed" and not stale,
+                       "exit": exit_info,
                        "rounds_completed": self._rounds_completed, "rounds_planned": self._rounds_planned,
-                       "age_seconds": age, "stale": age is None or age > CHECK_TTL,
+                       "age_seconds": age, "stale": stale,
                        "route": self._route, "checks": deepcopy(self._checks)}
             official = deepcopy(self._official)
         official_age = _age(official.get("checked_at"), now)
@@ -338,6 +367,7 @@ def _operational_state(tasks, *, fresh, issues=()):
     active = sum(task["signal"] == "active" for task in tasks)
     quiet = [task for task in tasks if task["signal"] == "quiet"]
     unknown = sum(task["signal"] == "unknown" for task in tasks)
+    waiting_user = sum(task["signal"] == "waiting_user" for task in tasks)
     tools = sum(task["pending_tools"] > 0 for task in tasks)
     starting = sum(task["signal"] == "active" and task["phase"] == "starting" for task in tasks)
     evidence = []
@@ -351,6 +381,8 @@ def _operational_state(tasks, *, fresh, issues=()):
         evidence.append("activity_unconfirmed")
     if starting:
         evidence.append("turn_start_only")
+    if waiting_user:
+        evidence.append("structured_user_input")
     if issues:
         evidence.append("recent_turn_failure")
     if not fresh:
@@ -365,6 +397,8 @@ def _operational_state(tasks, *, fresh, issues=()):
         level, affected = "notice", len(quiet)
     elif unknown:
         state, level, code, affected = "unknown", "unknown", "activity_unconfirmed", unknown
+    elif waiting_user:
+        state, level, code, affected = "waiting_user", "notice", "awaiting_user_input", waiting_user
     elif starting:
         state, level, code, affected = "waiting", "notice", "awaiting_response", starting
     elif not tasks:
@@ -375,6 +409,7 @@ def _operational_state(tasks, *, fresh, issues=()):
     return {"state": state, "level": level, "code": code, "evidence": evidence,
             "affected_tasks": affected, "active_tasks": active, "quiet_tasks": len(quiet),
             "unknown_tasks": unknown, "tool_tasks": tools, "starting_tasks": starting,
+            "waiting_user_tasks": waiting_user,
             "issue_tasks": len(issues),
             "score_scope": "public_path"}
 
@@ -404,10 +439,11 @@ def runtime_diagnostics(cards, *, feed_at, connected, observer=None, now=None, n
     tasks, totals, outputs, buckets, issues = [], [], [], [0] * 12, []
     latest = None
     for card in cards:
+        input_pending = fresh and pending_input(card, now)
         sync_pending = bool(card.get("sync_pending") is True and (
             card.get("status") == "running"
             or (card.get("status") == "unknown" and card.get("last_observed_status") == "running")))
-        if card.get("status") not in {"running", "failed"} and not sync_pending:
+        if card.get("status") not in {"running", "failed"} and not sync_pending and not input_pending:
             continue
         thread_id = card.get("id")
         evidence, tokens = observer.diagnostics_snapshot(thread_id) if observer else (card.get("runtime", {}), card.get("tokens", {}))
@@ -425,6 +461,8 @@ def runtime_diagnostics(cards, *, feed_at, connected, observer=None, now=None, n
         observed = max(evidence.get("activity_at") or 0, tokens.get("last_report_at") or 0)
         activity_age = _age(observed, now)
         signal = "unknown" if not fresh or not available or activity_age is None else "quiet" if activity_age >= QUIET_SECONDS else "active"
+        if input_pending:
+            signal = "waiting_user"
         if fresh and available and activity_age is not None:
             latest = max(latest or 0, observed)
         total = tokens.get("tokens_per_min") if fresh and available and tokens.get("ready") else None
@@ -439,6 +477,8 @@ def runtime_diagnostics(cards, *, feed_at, connected, observer=None, now=None, n
         phase = evidence.get("phase", "unknown") if fresh and available else "unknown"
         pending = evidence.get("pending_tools", 0)
         pending = max(0, int(pending)) if fresh and available and _number(pending) else 0
+        if input_pending:
+            pending = 0
         report_age = _age(tokens.get("last_report_at"), now)
         tasks.append({"id": thread_id, "name": str(card.get("name") or "")[:200],
                       "phase": phase,
@@ -448,7 +488,7 @@ def runtime_diagnostics(cards, *, feed_at, connected, observer=None, now=None, n
                       "last_report_at": tokens.get("last_report_at"),
                       "report_age_seconds": report_age,
                       "signal": signal, "pending_tools": pending, "sync_pending": sync_pending,
-                      "token_signal": _token_signal(fresh=fresh and available, total=total, pending_tools=pending,
+                      "token_signal": "waiting_user" if input_pending else _token_signal(fresh=fresh and available, total=total, pending_tools=pending,
                                                     phase=phase, report_age=report_age, activity_age=activity_age)})
     tasks.sort(key=lambda t: (t["signal"] != "quiet", -(t["activity_age_seconds"] or 0)))
     quiet = sum(t["signal"] == "quiet" for t in tasks)
@@ -456,6 +496,7 @@ def runtime_diagnostics(cards, *, feed_at, connected, observer=None, now=None, n
     activity = {"state": "unknown" if not fresh else "idle" if not tasks else "quiet" if quiet else "active" if active else "unknown",
                 "last_activity_at": latest, "quiet_tasks": quiet, "active_tasks": active,
                 "tool_tasks": sum(t["pending_tools"] > 0 for t in tasks),
+                "waiting_user_tasks": sum(t["signal"] == "waiting_user" for t in tasks),
                 "measured_tasks": len(totals), "output_measured_tasks": len(outputs),
                 "total_tokens_per_min": round(sum(totals), 1) if totals else None,
                 "output_tokens_per_min": round(sum(outputs), 1) if outputs else None, "buckets": buckets}

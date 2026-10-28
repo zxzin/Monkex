@@ -1,0 +1,37 @@
+:root{--ink:#183b27;--muted:#536b59;--paper:#f2f8ed;--green-ink:#23673b;--yellow:#ffd33d;--yellow-ink:#725300;--leaf-rim:#c6dec5;--leaf-hover:#d7eddc;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);color-scheme:light}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;background:transparent;overflow:hidden}
+button{font:inherit;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+.reminder-surface{width:100%;max-width:196px;padding:6px;user-select:none}
+.reminder-list{display:flex;flex-direction:column}
+.reminder-row{height:52px;flex:none;padding-bottom:6px;position:relative;animation:reminder-appear 240ms cubic-bezier(.2,.75,.25,1) both;transform-origin:var(--reminder-tail-x,50%) 100%}
+.reminder-bubble{--bubble-top:#f8fff2;--bubble-bottom:#eaf5e4;--bubble-rim:#b7d5af;--bubble-text:var(--ink);--bubble-detail:#4b6851;position:relative;display:grid;grid-template-columns:minmax(0,1fr) 24px;align-items:center;gap:8px;width:100%;height:46px;padding:5px 10px;border:1px solid var(--bubble-rim);border-radius:16px;background:linear-gradient(180deg,var(--bubble-top),var(--bubble-bottom));color:var(--bubble-text);text-align:left;cursor:pointer;box-shadow:inset 0 1px 0 #fff,0 3px 6px -2px #183b2721;touch-action:manipulation;overflow:visible;transition:border-color 140ms ease,box-shadow 140ms ease}
+.reminder-bubble::after{content:"";position:absolute;left:calc(var(--reminder-tail-x,50%) - 4px);bottom:-4px;width:8px;height:8px;border-right:1px solid var(--bubble-rim);border-bottom:1px solid var(--bubble-rim);border-radius:0 0 2px 0;background:var(--bubble-bottom);transform:rotate(45deg);pointer-events:none}
+:root[data-anchor=below] .reminder-row{transform-origin:var(--reminder-tail-x,50%) 0}
+:root[data-anchor=below] .reminder-bubble::after{top:-4px;bottom:auto;background:var(--bubble-top);transform:rotate(225deg)}
+.reminder-copy{display:flex;flex-direction:column;gap:1px;min-width:0}
+.reminder-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:16px;font-weight:600;letter-spacing:.01em}
+.reminder-detail{display:flex;align-items:center;min-width:0;font-size:11px;line-height:14px;font-weight:400;white-space:nowrap}
+.reminder-detail-text{overflow:hidden;text-overflow:ellipsis;color:var(--bubble-detail);font-weight:400}
+.reminder-arrow{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--yellow);color:var(--yellow-ink);box-shadow:inset 0 1px 0 #fff3a1,inset 0 0 0 1px #dbb52d55;transition:background 140ms ease,transform 140ms ease}
+.reminder-arrow svg{display:block;transition:transform 140ms ease}
+.reminder-bubble:hover:not(:disabled){--bubble-top:#f1ffe9;--bubble-bottom:#dff1d8;--bubble-rim:#91be88;box-shadow:inset 0 1px 0 #fff,0 3px 7px -2px #183b272b}
+.reminder-bubble:hover:not(:disabled) .reminder-arrow{background:#ffdd52}
+.reminder-bubble:hover:not(:disabled) .reminder-arrow svg{transform:translate(1px,-1px)}
+.reminder-bubble:focus-visible,.reminder-pages button:focus-visible{outline:2px solid var(--green-ink);outline-offset:-3px}
+.reminder-bubble:active:not(:disabled){--bubble-top:#e4f4dc;--bubble-bottom:#d9edcf;box-shadow:inset 0 1px 2px #183b2712}
+.reminder-bubble:active:not(:disabled) .reminder-arrow{transform:scale(.93)}
+.reminder-bubble[data-state=stale]{--bubble-top:#f4f7ef;--bubble-bottom:#edf3e7;--bubble-rim:#d4dfcd;--bubble-text:#61705e;--bubble-detail:#61705e;cursor:default;box-shadow:inset 0 1px 0 #ffffff88,0 2px 4px -2px #183b2712}
+.reminder-bubble[data-state=error]{--bubble-top:#fff9e4;--bubble-bottom:#fff1c3;--bubble-rim:#e4cf86;--bubble-text:#725300;--bubble-detail:#785c12}
+.reminder-bubble[data-state=error]:hover:not(:disabled){--bubble-top:#fff6d3;--bubble-bottom:#ffecad;--bubble-rim:#d8bc61}
+.reminder-bubble[data-state=busy]{cursor:progress}
+.reminder-pages{height:26px;display:flex;align-items:center;justify-content:space-between;gap:6px;color:var(--muted);font-size:10px;line-height:14px;font-variant-numeric:tabular-nums}
+.reminder-pages button{width:28px;height:24px;border:1px solid var(--leaf-rim);border-radius:8px;background:var(--paper);color:var(--green-ink);cursor:pointer;font-size:19px;line-height:20px;box-shadow:inset 0 1px 0 #fff}
+.reminder-pages button:hover:not(:disabled){background:var(--leaf-hover)}
+.reminder-pages button:disabled{opacity:.42;cursor:default}
+.reminder-empty{margin:0;min-height:46px;display:flex;align-items:center;justify-content:center;border:1px solid var(--leaf-rim);border-radius:16px;background:var(--paper);color:var(--muted);font-size:12px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@keyframes reminder-appear{from{opacity:0;transform:translateY(3px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+@media(prefers-reduced-transparency:reduce){.reminder-bubble{background:var(--bubble-bottom)}:root[data-anchor=below] .reminder-bubble::after{background:var(--bubble-bottom)}}

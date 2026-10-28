@@ -2,3 +2,13 @@
 identifier = "allow-set-pet-view"
 description = "Resize the desktop assistant to its compact board or collapsed tree."
 commands.allow = ["set_pet_view", "pet_pointer_inside"]
+
+[[permission]]
+identifier = "allow-sync-input-reminders"
+description = "Publish bounded pending-question identities to the local reminder window."
+commands.allow = ["sync_input_reminders"]
+
+[[permission]]
+identifier = "allow-read-input-reminders"
+description = "Read and manage the local reminder window; dismiss an opened prompt for this app session."
+commands.allow = ["get_input_reminders", "set_input_reminder_interaction", "set_input_reminder_page", "dismiss_input_reminder"]

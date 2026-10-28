@@ -1,7 +1,24 @@
 # Changelog
 
+## Unreleased — 2026-10-28
+
+- Dispatch reminder interaction, pagination and dismissal off the UI thread. Preserve window serialization while allowing native getters to complete during concurrent refreshes.
+- Polish compact replies into rounded speech bubbles with continuous tails, calmer text hierarchy and a circular yellow reply arrow. Preserve the full-row click area and above-tree position. Play one short entrance per newly visible row, keep normal polling still and respect reduced-motion settings.
+- Fit each reminder page to its text within 152–196px, reducing unused space for short titles while preserving room for long labels. Keep width across ordinary refreshes, pointer holds and native repositioning.
+- Compact independent reminders to a content-fit 152–196px window and 46px bubble. Successful navigation dismisses the exact prompt for this app session and resizes or hides the window; new questions remain eligible. Failed navigation keeps a retry path. Bounded in-memory navigation receipts preserve actual pending-question, unread-result and harvest state.
+- Place the floating reminder above the tree with a centered, tree-facing tail. Keep it inside the display work area; top-edge placement falls back below with its tail flipped toward the tree.
+- Show structured Codex input requests on task cards and in an independent floating reminder window. Each bubble names its task, displays the pending count and opens its original conversation without expanding the board. Stable paged ordering, inline failures and fresh exact-question validation protect navigation; opening preserves unread-result and harvest state. Official external navigation remains conversation-scoped.
+- Track current-turn question identities and matching structured replies in bounded local runtime records. Async tool acceptance keeps questions pending. Clear resolved questions and obsolete turns; unavailable observations show pending sync. Question text and answers stay out of reminder metadata.
+- Distinguish waiting for user input from quiet execution in runtime health. Keep connection scores, task failures, project grouping and completed-result priority independent. Add bilingual, lifecycle, navigation and narrow-layout coverage.
+
+## Unreleased — 2026-10-26
+
+- Add one compact observed-exit row to health details. Show the region returned by the existing public trace probe, keeping the score prominent. Omit unavailable VPN profile and selected-node names.
+- Reuse the existing bounded trace request and sampling cadence. Exit metadata stays in memory, clears on reset or observation failure, and hides when stale. Keep raw IPs, proxy URLs and credentials out of the payload. Add bilingual rendering, privacy, freshness and narrow-layout regressions; no OS VPN queries or third-party client integration.
+
 ## Unreleased — 2026-10-23
 
+- Pair the compact health number with five readable connection bands: Prime 95–100, Smooth 85–94, Steady 70–84, Mixed 60–69 and Poor 0–59. Explain each band and its range in the anchored details, retain task warnings, prioritize official notices, and preserve the existing score formula. Unknown or expired samples keep a dash and an explicit sampling/sync/retest label.
 - Add a compact pixel-heart indicator left of weekly quota. Its 13px numeric reading shows public-connection quality out of 100, with a visible Link label and a separate runtime alert. Task activity, waiting, quiet/unknown evidence and recent structured errors remain independent in its anchored popover; high public scores preserve operational warnings.
 - Show fresh reported Token usage or an evidence-based phase on running cards. Tool waits, first-response waits and missing reports remain distinct; rate values measure reported usage, including input/cache/output, rather than completion progress.
 - Preserve known running cards as Pending sync through transient API, observer and event-feed failures. Retain anchored long-running turns until a matching terminal event; newer completions and explicit archive/deletion take precedence. Recover temporary history-pagination gaps without resurrecting completed turns.

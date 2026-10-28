@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "reminders",
+  "description": "Read-only metadata for the local floating reply reminders.",
+  "windows": ["input-reminders"],
+  "remote": {"urls": ["http://127.0.0.1:8766/*"]},
+  "permissions": ["allow-read-input-reminders"]
+}

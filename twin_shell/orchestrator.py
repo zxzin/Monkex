@@ -376,6 +376,8 @@ class WorkTwinShell:
         result["stale"] = bool(self._feed_at and time.time() - self._feed_at > 30)
         if result.get("error") or result["stale"] or not self.client.running:
             for card in result.get("threads", []):
+                if isinstance(card.get("input_request"), dict):
+                    card["input_request"]["available"] = False
                 if card.get("status") == "running":
                     card.update(status="unknown", last_observed_status="running", sync_pending=True,
                                 stage="状态待同步", can_send=False, can_interrupt=False)
@@ -421,6 +423,49 @@ class WorkTwinShell:
         # This route is present in the installed desktop application's URL handler.
         open_codex_thread(thread_id)
         return {"ok": True}
+
+    def open_input(self, thread_id: str, *, turn_id: Any, question_id: Any) -> dict[str, Any]:
+        """Revalidate a bubble's question identity and open its original thread.
+
+        The official deep link targets a thread. The question identity is a
+        freshness guard; this endpoint never answers, acknowledges or sends.
+        """
+        import re
+        from .input_requests import MAX_QUESTIONS, pending_input
+        if not re.fullmatch(r"[a-zA-Z0-9_-]{1,100}", thread_id):
+            raise WorkTwinShellError("任务 ID 无效")
+        if (not isinstance(turn_id, str) or not 0 < len(turn_id) <= 256 or not turn_id.isprintable()
+                or not isinstance(question_id, str) or not 0 < len(question_id) <= 512):
+            raise WorkTwinShellError("问题定位信息无效，请刷新后重试")
+        try:
+            key = json.loads(question_id)
+        except (TypeError, ValueError, RecursionError) as error:
+            raise WorkTwinShellError("问题定位信息无效，请刷新后重试") from error
+        if (not isinstance(key, list) or len(key) != 3 or key[0] != "request_user_input_async"
+                or not isinstance(key[1], str) or not 0 < len(key[1]) <= 256 or not key[1].isprintable()
+                or type(key[2]) is not int or not 0 <= key[2] < MAX_QUESTIONS):
+            raise WorkTwinShellError("问题定位信息无效，请刷新后重试")
+        target = {"turn_id": turn_id, "question_id": json.dumps(key, separators=(",", ":"), ensure_ascii=False)}
+        with self._sync_lock:
+            if not self.client.running:
+                return {"ok": False, "stale": False, "reason": "sync_unavailable"}
+            try:
+                detail = self.feed.detail(thread_id, force=True)
+            except (WorkTwinShellError, AppServerError, OSError, ValueError, TimeoutError):
+                return {"ok": False, "stale": False, "reason": "sync_unavailable"}
+            card = detail["card"]
+            value = card.get("input_request") or {}
+            if not self.client.running or detail.get("thread", {}).get("id") != thread_id or value.get("available") is not True:
+                return {"ok": False, "stale": False, "reason": "sync_unavailable"}
+            with self._feed_lock:
+                for index, current in enumerate(self._feed_snapshot.get("threads", [])):
+                    if current.get("id") == thread_id:
+                        self._feed_snapshot["threads"][index] = deepcopy(card)
+                        break
+            if not pending_input(card, time.time()) or value.get("target") != target:
+                return {"ok": False, "stale": True, "reason": "input_target_changed"}
+            open_codex_thread(thread_id)
+        return {"ok": True, "navigation_scope": "thread"}
 
     def send_message(
         self, thread_id: str, message: str, *,

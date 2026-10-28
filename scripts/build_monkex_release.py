@@ -7,6 +7,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_FILES = ["index.html", "styles.css", "app.js", "banana-tree.js", "read-play.js", "task-navigation.js", "locale.js",
+    "reminders.html", "reminders.js", "reminders.css",
     "en/index.html", "en/app.js", "en/banana-tree.js", "en/read-play.js", "en/task-navigation.js",
     "assets/monkey-banana-2026-09-07/banana-tree.png",
     "assets/monkey-banana-2026-09-07/gold-chain-monkey.png",

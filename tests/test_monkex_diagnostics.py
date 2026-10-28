@@ -1,10 +1,11 @@
+import io
 import tempfile
 import threading
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from twin_shell.diagnostics import ConnectionMonitor, PROBES, STATUS_URL, TRACE_URL, parse_official, runtime_diagnostics
+from twin_shell.diagnostics import ConnectionMonitor, PROBES, STATUS_URL, TRACE_URL, parse_official, public_request, runtime_diagnostics
 from twin_shell.orchestrator import WorkTwinShell
 
 
@@ -259,6 +260,52 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertIsNone(shell.connection_monitor)
 
 
+class PublicTraceTests(unittest.TestCase):
+    def trace_response(self, body):
+        response = io.BytesIO(body)
+        response.status = 200
+        response.read = Mock(wraps=response.read)
+        with patch("twin_shell.diagnostics.build_opener") as opener:
+            opener.return_value.open.return_value = response
+            result = public_request(TRACE_URL, trace_body=True)
+        opener.return_value.open.assert_called_once()
+        response.read.assert_called_once_with(4097)
+        return result
+
+    def test_public_trace_keeps_only_strict_codes_and_salted_identity(self):
+        for address in ("203.0.113.8", "2001:db8::9"):
+            with self.subTest(address=address):
+                result = self.trace_response(f"ip={address}\nloc=JP\ncolo=NRT\nh=private-host\nurl=https://private.test\n".encode())
+                self.assertEqual((result["country_code"], result["edge_code"]), ("JP", "NRT"))
+                self.assertRegex(result["route_fingerprint"], r"^[0-9a-f]{64}$")
+                self.assertNotIn(address, str(result))
+                self.assertNotIn("private", str(result))
+                self.assertEqual(set(result), {"state", "latency_ms", "http_status", "route_fingerprint", "country_code", "edge_code"})
+
+    def test_invalid_ip_missing_ip_and_oversized_trace_expose_no_metadata(self):
+        for body in (b"loc=JP\ncolo=NRT\n", b"ip=invalid\nloc=JP\ncolo=NRT\n",
+                     b"ip=https://private.test\nloc=JP\ncolo=NRT\n",
+                     b"ip=203.0.113.8\nloc=JP\ncolo=NRT\n" + b"x" * 4097,
+                     b"ip=203.0.113.8\nip=203.0.113.9\nloc=JP\ncolo=NRT\n"):
+            with self.subTest(body=body[:40]):
+                result = self.trace_response(body)
+                self.assertNotIn("route_fingerprint", result)
+                self.assertNotIn("country_code", result)
+                self.assertNotIn("edge_code", result)
+
+    def test_trace_codes_require_exact_uppercase_ascii_lengths(self):
+        for country, edge in (("jp", "nrt"), ("JPN", "NR"), (" JP", "NRT "),
+                              ("J1", "NR1"), ("日本", "東京駅"), ("JP<script>", "NRT<script>")):
+            with self.subTest(country=country, edge=edge):
+                result = self.trace_response(f"ip=203.0.113.8\nloc={country}\ncolo={edge}\n".encode())
+                self.assertIsNone(result["country_code"])
+                self.assertIsNone(result["edge_code"])
+                self.assertIn("route_fingerprint", result)
+        result = self.trace_response(b"ip=203.0.113.8\nloc=US\n")
+        self.assertEqual(result["country_code"], "US")
+        self.assertIsNone(result["edge_code"])
+
+
 class MonitorTests(unittest.TestCase):
     def test_expected_auth_rejections_are_healthy_and_exit_change_clears_old_samples(self):
         node = ["exit-a"]
@@ -372,6 +419,73 @@ class MonitorTests(unittest.TestCase):
                 worker.join(1)
         self.assertFalse(monitor.snapshot()[0]["blocked"])
 
+    def test_exit_metadata_follows_observation_expiry_missing_trace_and_route_change(self):
+        now = [NOW]
+        trace = [{"state": "reachable", "route_fingerprint": "exit-a", "country_code": "JP", "edge_code": "NRT"}]
+        seen = []
+        def request(url, **kwargs):
+            seen.append(url)
+            return trace[0] if kwargs.get("trace_body") else {"state": "reachable", "latency_ms": 100, "http_status": 200}
+        monitor = ConnectionMonitor(clock=lambda: now[0], request=request)
+        self.assertEqual(monitor.snapshot()[0]["exit"], {
+            "state": "unknown", "country_code": None, "edge_code": None, "checked_at": None})
+        monitor._round()
+        observed = monitor.snapshot()[0]
+        self.assertEqual(observed["exit"], {"state": "observed", "country_code": "JP", "edge_code": "NRT", "checked_at": NOW})
+        self.assertNotIn("exit-a", str(observed))
+        observed["exit"]["country_code"] = "XX"
+        self.assertEqual(monitor.snapshot()[0]["exit"]["country_code"], "JP")
+        self.assertEqual(seen.count(TRACE_URL), 1)
+        self.assertEqual(set(seen), {*PROBES.values(), STATUS_URL, TRACE_URL})
+        now[0] += 301
+        self.assertEqual(monitor.snapshot()[0]["exit"], {
+            "state": "stale", "country_code": None, "edge_code": None, "checked_at": NOW})
+        self.assertFalse(monitor.snapshot()[0]["exit_observed"])
+        trace[0] = {"state": "timeout"}
+        monitor._round()
+        self.assertEqual(monitor.snapshot()[0]["exit"], {
+            "state": "unknown", "country_code": None, "edge_code": None, "checked_at": now[0]})
+        trace[0] = {"state": "reachable", "route_fingerprint": "exit-b", "country_code": "US", "edge_code": "LAX"}
+        monitor._round()
+        self.assertEqual(monitor.snapshot()[0]["exit"]["country_code"], "US")
+        self.assertEqual(monitor.snapshot()[0]["route_generation"], 2)
+        self.assertEqual(len(monitor._history), 3)
+
+    def test_manual_reset_immediately_clears_exit(self):
+        def request(url, **kwargs):
+            return {"state": "reachable", "latency_ms": 100, "http_status": 200,
+                    "route_fingerprint": "exit-a", "country_code": "JP", "edge_code": "NRT"} if kwargs.get("trace_body") else {
+                        "state": "reachable", "latency_ms": 100, "http_status": 200}
+        monitor = ConnectionMonitor(clock=lambda: NOW, request=request)
+        monitor._round()
+        self.assertEqual(monitor.snapshot()[0]["exit"]["state"], "observed")
+        with patch.object(threading.Thread, "start"):
+            self.assertTrue(monitor.request_check(force=True, reset=True))
+        reset = monitor.snapshot()[0]
+        self.assertEqual(reset["exit"], {"state": "unknown", "country_code": None, "edge_code": None, "checked_at": None})
+        self.assertNotIn("vpn", reset)
+        self.assertFalse(reset["exit_observed"])
+        self.assertEqual(len(monitor._history), 0)
+        monitor.close()
+
+    def test_invalid_trace_after_observed_exit_clears_all_old_labels(self):
+        body = [b"ip=203.0.113.8\nloc=JP\ncolo=NRT\n"]
+        def request(url, **kwargs):
+            if kwargs.get("trace_body"):
+                response = io.BytesIO(body[0])
+                response.status = 200
+                with patch("twin_shell.diagnostics.build_opener") as opener:
+                    opener.return_value.open.return_value = response
+                    return public_request(url, trace_body=True)
+            return {"state": "reachable", "latency_ms": 100, "http_status": 200}
+        monitor = ConnectionMonitor(clock=lambda: NOW, request=request)
+        monitor._round()
+        self.assertEqual(monitor.snapshot()[0]["exit"]["country_code"], "JP")
+        body[0] = b"ip=invalid\nloc=US\ncolo=LAX\n"
+        monitor._round()
+        self.assertEqual(monitor.snapshot()[0]["exit"], {
+            "state": "unknown", "country_code": None, "edge_code": None, "checked_at": NOW})
+        self.assertFalse(monitor.snapshot()[0]["exit_observed"])
 
 if __name__ == "__main__":
     unittest.main()

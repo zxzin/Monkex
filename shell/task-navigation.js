@@ -5,12 +5,12 @@
       Object.assign(this,{api,getCard,isConnected,onPending,onOpened,onRead,onError,readPlay});
       this.revision=0;this.pending=null;this.queue=Promise.resolve();
     }
-    navigate(id){
+    navigate(id,{acknowledge=true}={}){
       if(this.pending?.id===id)return this.pending.promise;
       if(!this.isConnected()){this.onError('连接恢复后再打开，未读结果会保留');return Promise.resolve(false);}
       const revision=++this.revision;
       const clicked=this.getCard(id);
-      const version=clicked?.unread&&clicked.status!=='running'?clicked.pending_result_version:null;
+      const version=acknowledge&&clicked?.input_request?.pending!==true&&clicked?.unread&&clicked.status!=='running'?clicked.pending_result_version:null;
       this.onPending(id);
       // Serialize OS dispatches and skip superseded queued clicks so the final target wins.
       const promise=this.queue.then(async()=>{
@@ -21,7 +21,7 @@
         if(opened?.ok!==true)throw Error('Codex 尚未确认打开，请重试');
         if(revision!==this.revision){this.readPlay?.cancel(id);return false;}
         this.onOpened(id);
-        const matches=card=>card?.unread&&card.status!=='running'&&card.pending_result_version===version;
+        const matches=card=>card?.input_request?.pending!==true&&card?.unread&&card.status!=='running'&&card.pending_result_version===version;
         if(!version||!matches(this.getCard(id))){this.readPlay?.cancel(id);return true;}
         try{
           const receipt=await this.api('/api/threads/'+encodeURIComponent(id)+'/ack',{version});

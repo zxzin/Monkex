@@ -21,12 +21,13 @@
       </span>
       <span id="petQuota" class="pet-quota" data-state="unknown"><span>Left</span><strong id="petQuotaRemaining">—</strong></span>
     </button>
+    <button id="petInputBubble" class="pet-input-bubble" type="button" aria-label="Needs reply" hidden>1</button>
   </section>
   <main class="app-shell" id="appShell">
     <header class="topbar">
       <div id="greetMonkey" class="brand-pet" title="This week's harvest"><span id="brandMonkey" class="monkey-art" data-frame="idle" aria-hidden="true"><img src="/shell/assets/monkey-banana-2026-09-07/gold-chain-monkey.png" alt=""></span></div>
       <div class="heading" id="dragArea"><h1><span id="viewHeading" title="Monkex · Codex task board">Monkex</span><i id="connectionDot" class="connection-dot" title="Connecting" aria-label="Connecting"></i></h1><span id="connectionText" class="sr-only">Connecting to Codex</span></div>
-      <button id="runtimeHealthToggle" class="health-badge" type="button" aria-expanded="false" aria-controls="runtimeHealth" aria-label="Public connection · — · Codex health · Unconfirmed" title="Public connection · — · Codex health · Unconfirmed" data-level="unknown" data-score-level="unknown"><svg class="health-heart" viewBox="0 0 12 11" aria-hidden="true"><path d="M1 1h3v1h1v1h2V2h1V1h3v1h1v4h-1v1h-1v1H9v1H8v1H7v1H5v-1H4V9H3V8H2V7H1V6H0V2h1z"/></svg><span class="health-reading"><strong id="healthBadgeValue">—</strong><span class="health-caption">Link</span></span><i id="healthRuntimeAlert" class="health-runtime-alert" data-level="unknown" aria-hidden="true"></i></button>
+      <button id="runtimeHealthToggle" class="health-badge" type="button" aria-expanded="false" aria-controls="runtimeHealth" aria-label="Public connection · — · Codex health · Unconfirmed" title="Public connection · — · Codex health · Unconfirmed" data-level="unknown" data-score-level="unknown"><svg class="health-heart" viewBox="0 0 12 11" aria-hidden="true"><path d="M1 1h3v1h1v1h2V2h1V1h3v1h1v4h-1v1h-1v1H9v1H8v1H7v1H5v-1H4V9H3V8H2V7H1V6H0V2h1z"/></svg><span class="health-reading"><strong id="healthBadgeValue">—</strong></span><span id="healthBadgeTier" class="health-caption">Syncing</span><i id="healthRuntimeAlert" class="health-runtime-alert" data-level="unknown" aria-hidden="true"></i></button>
       <span id="weeklyQuota" class="weekly-quota" title="Waiting for weekly quota"><button id="quotaResetToggle" class="quota-reset-toggle" type="button" aria-expanded="false" aria-controls="quotaResetWindows" title="Show quota reset times"><span>Weekly</span><strong id="weeklyRemaining">—</strong></button><button id="quotaCoinButton" class="quota-coin-button" type="button" aria-label="Refresh tasks and quota" title="Click to refresh tasks and quota"><img class="quota-coin" src="/shell/assets/monkex-coins-2026-09-07/banana-coin-v1.png" alt="" aria-hidden="true"></button></span>
       <button id="pinButton" class="pin-button" type="button" aria-pressed="false" aria-label="Pin board" title="Pin board"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="pin-shadow" d="M5 21h14" /><g class="pin-art"><path class="pin-needle" d="M12 14v7"/><path class="pin-head" d="M8 3h8v3l-1 1v4l3 3v2H6v-2l3-3V7L8 6z"/><path class="pin-glint" d="M10 5h3"/></g></svg></button>
       <button id="collapseButton" class="icon-button" type="button" aria-label="Collapse to tree" title="Collapse to tree"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg></button>
@@ -55,7 +56,10 @@
       <div id="runtimeHealthBody" class="runtime-health-body">
         <p id="healthOperationalReason" class="health-assessment">Runtime needs confirmation</p>
         <div class="health-connection-score"><span>Public connection</span><strong id="healthScoreValue" class="health-score-value">—</strong><span id="healthConnectionConfidence">Pending sync</span></div>
+        <p id="healthExitInfo" class="health-exit"><span>Observed exit</span><strong id="healthExitRegion">Awaiting check</strong></p>
+        <div class="health-tier-heading"><strong id="healthTierName">Awaiting score</strong><span id="healthTierRange"></span></div>
         <p id="healthScoreReason" class="health-assessment">Sampling the current path…</p>
+        <ol id="healthTierScale" class="health-tier-scale" aria-label="Connection score bands"></ol>
         <p id="healthScoreProgress" class="health-subline">Preparing checks</p>
         <p id="healthRouteNote" class="health-subline" hidden></p>
         <div class="health-score-metrics"><span>Success <strong id="healthSuccessRate">—</strong></span><span>Median <strong id="healthP50">—</strong></span><span>Slow P95 <strong id="healthP95">—</strong></span><span>Jitter <strong id="healthJitter">—</strong></span></div>

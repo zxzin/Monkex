@@ -93,6 +93,9 @@ class ShellRequestHandler(BaseHTTPRequestHandler):
             elif path.startswith("/api/threads/") and path.endswith("/ack"):
                 thread_id = unquote(path.removeprefix("/api/threads/").removesuffix("/ack")).strip("/")
                 self._json(self.server.shell.acknowledge_result(thread_id, str(payload.get("version") or "")))
+            elif path.startswith("/api/threads/") and path.endswith("/open-input"):
+                thread_id = unquote(path.removeprefix("/api/threads/").removesuffix("/open-input")).strip("/")
+                self._json(self.server.shell.open_input(thread_id, turn_id=payload.get("turn_id"), question_id=payload.get("question_id")))
             elif path.startswith("/api/threads/") and path.endswith("/open"):
                 thread_id = unquote(path.removeprefix("/api/threads/").removesuffix("/open")).strip("/")
                 self._json(self.server.shell.open_thread(thread_id))

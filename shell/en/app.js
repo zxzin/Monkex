@@ -90,9 +90,26 @@ function node(tag, className, text) {
   return e;
 }
 function shortStatus(card) {
-  return {running:"Running",pending:"Pending sync",unread:"Completed",read:"Read"}[displayStatus(card)];
+  return {running:"Running",waiting:"Needs reply",pending:"Pending sync",unread:"Completed",read:"Read"}[displayStatus(card)];
+}
+function inputRequestState(card,now=Date.now()/1000) {
+  const request=card.input_request;
+  if(request?.pending!==true)return "none";
+  const fresh=request.available===true&&request.turn_id&&request.turn_id===card.latest_turn_id&&Number.isFinite(request.observed_at)&&now-request.observed_at<=30&&now-request.observed_at>=-30;
+  return state.connected&&!card.sync_pending&&fresh?"waiting":"pending";
+}
+function inputReminderItems() {
+  return state.threads.filter(card=>card.input_request?.pending===true).slice(0,32).map(card=>{
+    const request=card.input_request,target=request.target||{};
+    const validTarget=typeof target.turn_id==="string"&&target.turn_id===request.turn_id&&typeof target.question_id==="string"&&target.question_id.length>0;
+    return {thread_id:card.id,turn_id:target.turn_id||request.turn_id||"",question_id:target.question_id||"",
+      title:Array.from(String(card.name||"Monkex").replace(/\p{Cc}/gu," ")).slice(0,160).join(""),count:Math.max(1,Math.min(999,Math.floor(Number(request.count)||1))),
+      available:validTarget&&inputRequestState(card)==="waiting"};
+  });
 }
 function displayStatus(card) {
+  const input=inputRequestState(card);
+  if(input!=="none")return input;
   const running=card.status==="running";
   if((running&&(!state.connected||card.sync_pending))||(card.status==="unknown"&&card.last_observed_status==="running"&&card.sync_pending))return "pending";
   return running?"running":card.unread?"unread":"read";
@@ -112,6 +129,7 @@ function taskRunState(card,now=Date.now()/1000) {
   const age=Number.isFinite(runtime.activity_at)?now-runtime.activity_at:null;
   const reportFresh=Number.isFinite(tokens.last_report_at)&&now-tokens.last_report_at<=60&&now-tokens.last_report_at>=-30;
   if(reportFresh&&tokens.ready&&tokens.tokens_per_min>0)return {label:formatRate(tokens.tokens_per_min)+" t/min",hint:"Reported token usage over 60 seconds, including input, cache and output; this is a usage rate"};
+  if(runtime.phase==="waiting_user")return {label:"Needs reply",hint:"Codex is waiting for your input. Open the original chat to reply."};
   if(runtime.pending_tools>0)return {label:age!==null&&age>=180?"Tool wait":"Tool call",hint:"A tool call has started without a completion record. Local Python and other tools may produce no new token reports"};
   if(age!==null&&age>=180)return {label:"Unconfirmed",hint:"No new activity for a while; the task may be reasoning or waiting. Check the original conversation"};
   if(runtime.phase==="starting")return {label:"Awaiting response",hint:"The turn has started; no first model or tool activity has been observed"};
@@ -157,12 +175,16 @@ function updateTaskRow(button,card) {
   const icon=node("i","task-state");icon.setAttribute("aria-hidden","true");
   const copy=node("div","task-copy"),title=node("div","task-title-line");
   title.append(node("strong","",card.name));
-  title.append(node("span","row-status",shortStatus(card)));
+  const badge=node("span",status==="waiting"?"input-bubble":"row-status",shortStatus(card));
+  if(status==="waiting")badge.title="Open Codex to reply; unread results stay unread.";
+  title.append(badge);
   const meta=node("div","task-meta"),progress=node("span","stage",card.summary||card.project_label||"Task");
   progress.title=card.summary?"Latest progress · "+card.summary:"";meta.append(progress);
-  if(status==="running"||status==="pending"){
+  if(status==="waiting"&&card.status!=="running"){
+    const reply=node("span","row-input-hint","Reply ↗");meta.append(reply);
+  }else if(status==="running"||status==="pending"||status==="waiting"){
     const observed=taskRunState(card),speed=node("span","row-rate");speed.title=observed.hint;
-    const measured=observed.label.includes("t/min"),fan=node("span","token-fan mini-fan");renderTokenFan(fan,measured?card.tokens:null,status==="running"&&measured);
+    const measured=observed.label.includes("t/min"),fan=node("span","token-fan mini-fan");renderTokenFan(fan,measured?card.tokens:null,card.status==="running"&&measured);
     speed.append(fan,node("span","",observed.label));meta.append(speed);
   }else meta.append(node("time","",relativeTime(activityTime(card))));
   copy.append(title,meta);button.replaceChildren(icon,copy);
@@ -226,12 +248,20 @@ function updateCounts() {
   const groups=boardSets();
   renderQuotaFlow($("weeklyQuota"),groups.board,quota);
   const running=groups.board.filter(t=>state.connected&&t.status==="running").length;
+  const needsInput=state.threads.filter(card=>inputRequestState(card)==="waiting");
+  const inputBubble=$("petInputBubble");
+  const nativeReminders=state.petMode&&typeof window.__TAURI__?.core?.invoke==="function";
+  inputBubble.hidden=nativeReminders||needsInput.length===0;
+  if(nativeReminders)invokeDesktop("sync_input_reminders",{items:inputReminderItems(),lang:document.documentElement.lang}).catch(()=>{});
+  inputBubble.textContent=needsInput.length>99?"99+":String(needsInput.length);
+  inputBubble.title=needsInput.length+" chats need your reply. Open in Codex.";
+  inputBubble.setAttribute("aria-label",inputBubble.title);
   const unread=groups.recent.filter(t=>displayStatus(t)==="unread").length;
   $("boardCount").textContent=groups.board.length;
   $("recentCount").textContent=groups.recent.length;
   $("historyCount").textContent=groups.history.length;
   const activity=window.WorkTwinBananaTree.activityState(unread,running,state.connected);
-  const label=activity.label;
+  const label=activity.label+(needsInput.length?" · "+needsInput.length+" chats need your reply":"");
   $("petLauncher").dataset.state=activity.state;
   $("petCharacter").dataset.running=String(activity.running);
   const quotaLabel=quota.state==="unknown"?"Weekly quota pending":"Weekly "+quota.label;
@@ -355,7 +385,7 @@ function healthTime(timestamp) {
   return new Date(timestamp*1000).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 }
 function healthPhase(phase) {
-  return {thinking:"Reasoning",tool:"Tool activity",response:"Output",waiting:"Waiting",starting:"Starting",unknown:"Type unknown"}[phase]||"Type unknown";
+  return {thinking:"Reasoning",tool:"Tool activity",response:"Output",waiting:"Waiting",waiting_user:"Needs reply",starting:"Starting",unknown:"Type unknown"}[phase]||"Type unknown";
 }
 function healthNetworkText(check) {
   if(!check)return "Not checked";
@@ -364,14 +394,24 @@ function healthNetworkText(check) {
   const latency=Number.isFinite(check.latency_ms)?Math.round(check.latency_ms)+" ms":"";
   return label+(latency?" · "+latency:"")+(check.state==="http_error"&&Number.isInteger(check.http_status)?" · "+check.http_status:"");
 }
+function healthConnectionTiers() {
+  return [
+    {min:95,max:100,key:"excellent",label:"Prime",name:"Excellent connection",description:"Public endpoints respond quickly with little variation: the best connection band. Model queues, reasoning and tools still affect waiting time."},
+    {min:85,max:94,key:"smooth",label:"Smooth",name:"Smooth connection",description:"Public connectivity looks good for ongoing interaction. Occasional waits remain possible; check task activity for actual progress."},
+    {min:70,max:84,key:"steady",label:"Steady",name:"Steady connection",description:"Public connectivity is broadly usable, with room to improve delay or variation. Continue while checking that tasks report new activity."},
+    {min:60,max:69,key:"mixed",label:"Mixed",name:"Variable connection",description:"Variable connectivity may add waits or retries. Retest another route and check task activity and official status."},
+    {min:0,max:59,key:"poor",label:"Poor",name:"Unstable connection",description:"Poor public connectivity raises the risk of waits or failures. Check the network or change routes, then verify recovery in a real task."}
+  ];
+}
 function renderOperationalHealth(data,now) {
   const fresh=!state.diagnosticsFailed&&data?.data_state==="current"&&Number.isFinite(data?.observed_at)&&now-data.observed_at<=30&&now-data.observed_at>=-30;
   const value=fresh?data?.operational:null;
-  const states={active:["Active","ok"],tool_running:["Tool call","ok"],quiet:["Unconfirmed","notice"],waiting:["Awaiting response","notice"],error:["Issue","warning"],unknown:["Unconfirmed","unknown"],idle:["Idle","unknown"]};
+  const states={active:["Active","ok"],tool_running:["Tool call","ok"],waiting_user:["Needs reply","notice"],quiet:["Unconfirmed","notice"],waiting:["Awaiting response","notice"],error:["Issue","warning"],unknown:["Unconfirmed","unknown"],idle:["Idle","unknown"]};
   const selected=states[value?.state]||states.unknown;
   let [label,level]=selected;
   if(value?.state==="tool_running"&&value.level!=="ok"){label="Tool wait";level="notice";}
   const reasons={active:"Recent task activity was observed.",tool_running:"A tool call was observed; awaiting its completion record.",tool_wait:"Some tools have not returned for a while. Check the original conversation; continued execution is unconfirmed.",quiet:"Some tasks have had no new activity for a while. Check their original conversations.",awaiting_response:"Tasks have started; their first model or tool response has not been observed.",recent_connection_error:"A recent turn recorded a connection failure. Check the original conversation; no reconnect was performed here.",recent_task_error:"A recent turn recorded an execution error. Check the original conversation for its cause.",activity_unconfirmed:"Some task records are unavailable; waiting for confirmation.",sync_unavailable:"Runtime records are pending sync; previous task cards are retained.",idle:"No tasks are running; check the connection when needed."};
+  reasons.awaiting_user_input="Codex needs your reply. Open the original chat; this is an input request.";
   const reason=reasons[value?.code]||reasons.sync_unavailable;
   const affected=Number.isInteger(value?.affected_tasks)&&value.affected_tasks>0?value.affected_tasks:0;
   $("healthSummary").textContent=label;
@@ -382,7 +422,7 @@ function renderOperationalHealth(data,now) {
   badge.dataset.checking=String(Boolean(state.diagnosticsResetting||data?.network?.checking));
   const alert=$("healthRuntimeAlert");alert.dataset.level=level;
   alert.hidden=level==="ok"||value?.state==="idle";
-  const scoreLabel="Public connection · "+$("healthScoreValue").textContent;
+  const scoreLabel="Public connection · "+$("healthScoreValue").textContent+" · "+$("healthBadgeTier").textContent;
   badge.setAttribute("aria-label",scoreLabel+" · Codex health · "+label);
   badge.title=scoreLabel+"\n"+"Codex health · "+label+"\n"+reason;
 }
@@ -393,17 +433,27 @@ function renderHealthScore(data,now=Date.now()/1000) {
   const valid=current&&!stale&&["good","fair","poor"].includes(score.grade)&&Number.isFinite(score.value)&&score.value>=0&&score.value<=100;
   const grade=stale?"stale":valid?score.grade:"collecting";
   const confidence=valid?{provisional:"Preliminary",short_check:"Short check"}[score.confidence]||"Preliminary":stale?"Retest needed":current||state.diagnosticsResetting?"Sampling":"Pending sync";
+  const tiers=healthConnectionTiers(),rounded=valid?Math.round(score.value):null;
+  const tier=valid?tiers.find(item=>rounded>=item.min&&rounded<=item.max):null;
   $("healthScoreValue").textContent=valid?Math.round(score.value)+" /100":"—";
   $("healthBadgeValue").textContent=valid?String(Math.round(score.value)):"—";
+  $("healthBadgeTier").textContent=tier?tier.label:stale?"Retest":confidence==="Pending sync"?"Syncing":confidence;
+  $("healthTierName").textContent=tier?tier.name:stale?"Samples expired":"Awaiting score";
+  $("healthTierRange").textContent=tier?tier.min+"–"+tier.max+" points":"";
+  $("healthTierScale").replaceChildren(...tiers.map(item=>{
+    const row=node("li","health-tier-step");row.dataset.tier=item.key;
+    if(item===tier)row.setAttribute("aria-current","true");
+    row.append(node("strong","",item.label),node("span","",item.min+"–"+item.max));return row;
+  }));
   $("runtimeHealthToggle").dataset.scoreLevel=valid?{good:"ok",fair:"notice",poor:"warning"}[score.grade]:"unknown";
   $("healthScoreValue").title="Score from public-path samples; verify actual Codex responses through tasks.";
   $("healthConnectionConfidence").textContent=confidence;
-  const reasons={good:"The current path looks responsive. Continue observing actual task progress.",fair:"The current path has delay or jitter. Compare a short check after switching nodes.",poor:"The current path has frequent failures or jitter. Switch nodes and retest.",collecting:"Building a baseline for this node. Several rounds are needed before scoring.",stale:"These samples have expired. Retest the current node."};
+  const reasons={collecting:"Building a baseline for this node. Several rounds are needed before scoring.",stale:"These samples have expired. Retest the current node."};
   const noteLabels={partial_coverage:"Service coverage is incomplete.",insufficient_rounds:"More independent rounds are needed.",runtime_unconfirmed:"Actual Codex responses remain unverified.",runtime_quiet:"Some running tasks have no recent activity.",missing_latency:"Latency data is insufficient.",failed_latency_floor:"Failed requests are included in latency scoring.",http_restricted:"The endpoint restricts access. Use this as a path reference.",unexpected_response:"The endpoint returned an unexpected response.",service_failures:"Some service connection checks failed.",codex_recent_failures:"Recent Codex path checks failed.",official_codex_degraded:"Official status reports degraded Codex performance.",official_codex_outage:"Official status reports a Codex outage.",official_other_notice:"Official status reports issues in other services.",official_status_unknown:"Official status is unavailable.",short_check_only:"A short check reflects this moment. Keep observing."};
   const notes=Array.isArray(score.notes)?score.notes:[];
   const priority=["official_codex_outage","official_codex_degraded","codex_recent_failures","service_failures","http_restricted","unexpected_response","partial_coverage","insufficient_rounds","missing_latency","runtime_quiet","runtime_unconfirmed","official_status_unknown"];
   const reasonCode=priority.find(code=>notes.includes(code));
-  $("healthScoreReason").textContent=(current||state.diagnosticsResetting||stale?reasons[grade]:"Reading the current path score…")+(current&&reasonCode?" "+noteLabels[reasonCode]:"");
+  $("healthScoreReason").textContent=(current&&reasonCode?noteLabels[reasonCode]+" ":"")+(tier?tier.description:current||state.diagnosticsResetting||stale?reasons[grade]:"Reading the current path score…");
   const count=Number.isInteger(score.sample_count)&&score.sample_count>=0?score.sample_count:0;
   const rounds=Number.isInteger(network.rounds_completed)?network.rounds_completed:Number.isInteger(score.round_count)?score.round_count:0;
   const planned=Number.isInteger(network.rounds_planned)&&network.rounds_planned>0?network.rounds_planned:6;
@@ -417,14 +467,28 @@ function renderHealthScore(data,now=Date.now()/1000) {
     $(id).textContent=current&&!stale&&Number.isFinite(score[key])?Math.round(score[key])+suffix:"—";
   }
 }
+function renderHealthExit(data,now) {
+  const network=data?.network||{},exit=network.exit||{};
+  const current=!state.diagnosticsFailed&&!state.diagnosticsResetting&&data?.data_state==="current"&&Number.isFinite(data?.observed_at)&&now-data.observed_at<=30&&now-data.observed_at>=-30;
+  const fresh=value=>current&&!network.stale&&Number.isFinite(value.checked_at)&&now-value.checked_at>=-30&&now-value.checked_at<=300;
+  const exitFresh=fresh(exit)&&exit.state==="observed";
+  const country=exitFresh&&/^[A-Z]{2}$/.test(exit.country_code||"")?exit.country_code:null;
+  let region=country;
+  if(country){try{region=new Intl.DisplayNames(["en-US"],{type:"region"}).of(country)||country;}catch{}}
+  $("healthExitRegion").textContent=country?(region===country?country:region+" · "+country):state.diagnosticsResetting?"Checking":!current?"Pending sync":network.stale||exit.state==="stale"?"Retest needed":"Exit unconfirmed";
+  $("healthExitInfo").title="The public probe's exit may differ from Codex's actual path.";
+  $("healthExitRegion").title=exitFresh&&/^[A-Z]{3}$/.test(exit.edge_code||"")?"Service edge "+exit.edge_code:"";
+}
 function renderDiagnostics(now=Date.now()/1000) {
   const panel=$("runtimeHealth");if(!panel)return;
   const data=state.diagnostics,activity=data?.activity||{},assessment=data?.assessment||{};
   const fresh=!state.diagnosticsFailed&&data?.data_state==="current"&&Number.isFinite(data?.observed_at)&&now-data.observed_at<=30&&now-data.observed_at>=-30;
   renderHealthScore(data,now);
   renderOperationalHealth(data,now);
+  renderHealthExit(data,now);
   const explanations={sync_unavailable:"Activity data is unavailable. Wait for sync before assessing progress.",idle:"No tasks are running. You can check the connection on demand.",network_unavailable:"Public connection checks failed. Check the network or proxy and retry.",openai_path:"Public internet is reachable; the OpenAI path is slow or failed. Try another route and recheck.",connection_slow:"This public connection check was slow. Recheck and compare task activity.",reference_path:"The public reference check failed; the OpenAI path is reachable. Check again to compare.",endpoint_response:"The connection succeeded, but the public endpoint returned an HTTP restriction or error. Check its status code; this result describes only the probe endpoint.",service_notice:"The official status reports a disruption that may affect some tasks.",quiet:"Some tasks have been quiet for a while. Compare connection checks and official status.",active:"Recent activity detected. Compare output reports and task events to assess progress.",waiting:"Running tasks have no new reports yet. They may be reasoning, using tools or awaiting a response."};
   Object.assign(explanations,{tool_running:"Tool calls are pending. Their execution may produce no new tokens.",tool_wait:"Some tools have not returned for a while; check the original conversation.",awaiting_response:"Tasks started; waiting for the first response.",activity_unconfirmed:"Some task records are pending sync.",recent_connection_error:"A recent turn recorded a connection failure.",recent_task_error:"A recent turn recorded an execution error."});
+  explanations.awaiting_user_input="Codex needs your reply. Open the original chat; this is an input request.";
   const output=fresh&&Number.isFinite(activity.output_tokens_per_min)?activity.output_tokens_per_min:null;
   $("healthAssessment").textContent=fresh?(explanations[assessment.code]||explanations.waiting):explanations.sync_unavailable;
   $("healthTotalRate").textContent=fresh?formatRate(activity.total_tokens_per_min):"—";
@@ -458,7 +522,7 @@ function renderDiagnostics(now=Date.now()/1000) {
     const name=node("strong","",String(task.name||"Task"));name.title=String(task.name||"Task");
     title.append(name,node("span","",fresh?healthAge(task.activity_age_seconds):"Pending sync"));
     row.dataset.signal=fresh?String(task.signal||"unknown"):"unknown";
-    const meta=node("p","",healthPhase(task.phase)+" · "+"Out rpt. "+(fresh?formatRate(task.output_tokens_per_min):"—")+"/min");
+    const meta=node("p","",fresh&&task.signal==="waiting_user"?"Needs reply · Continue in the original Codex chat":healthPhase(task.phase)+" · "+"Out rpt. "+(fresh?formatRate(task.output_tokens_per_min):"—")+"/min");
     meta.title=[task.model,task.effort].filter(value=>typeof value==="string").join(" · ")+" · "+"Last report "+healthAge(task.report_age_seconds);
     row.append(title,meta);list.append(row);
   }
@@ -497,7 +561,7 @@ function activityTime(card) {
   return times.length?Math.max(...times):0;
 }
 function boardSets(now=Date.now()/1000) {
-  const active=t=>t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true);
+  const active=t=>t.input_request?.pending===true||t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true);
   const age=t=>activityTime(t)?Math.max(0,now-activityTime(t)):Infinity;
   const recent=state.threads.filter(t=>active(t)||age(t)<=86400);
   return {
@@ -507,7 +571,7 @@ function boardSets(now=Date.now()/1000) {
   };
 }
 function filtered() {
-  const rank=t=>t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true)?2:state.filter==="recent"&&!t.unread?1:0;
+  const rank=t=>t.input_request?.pending===true?(t.unread?0:1):t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true)?3:state.filter==="recent"&&!t.unread?2:0;
   const sorted=(boardSets()[state.filter]||[]).sort((a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
   return projectGroups(sorted).flatMap(group=>group.cards);
 }
@@ -694,7 +758,8 @@ function onWindowFocus(event) {
 async function selectThread(id) {
   cancelAutoCollapse();
   const revision=++state.selectionRevision;
-  const opened=await state.navigation.navigate(id);
+  const awaitingInput=state.threads.find(card=>card.id===id)?.input_request?.pending===true;
+  const opened=await state.navigation.navigate(id,{acknowledge:!awaitingInput});
   if(opened&&revision===state.selectionRevision&&!state.pinned&&state.petMode&&$("systemBanner").hidden){
     state.autoCollapseTimer=setTimeout(()=>{
       state.autoCollapseTimer=null;
@@ -761,6 +826,12 @@ function bindPetDrag() {
 }
 function bind() {
   window.addEventListener("work-twin-window-focus",onWindowFocus);
+  $("petInputBubble").onpointerdown=event=>{event.stopPropagation();cancelHoverExpand();};
+  $("petInputBubble").onclick=()=>{
+    const waiting=state.threads.filter(card=>inputRequestState(card)==="waiting").sort((a,b)=>activityTime(b)-activityTime(a));
+    if(!waiting.length)return;
+    mode("compact",{activate:false});selectThread(waiting[0].id);
+  };
   $("quotaCoinButton").onclick=refreshFromCoin;
   $("quotaResetToggle").onclick=()=>setQuotaResetExpanded($("quotaResetWindows").hidden);
   $("resetCardDetails").ontoggle=()=>{if($("resetCardDetails").open)setHealthExpanded(false);syncBoardSize(false,false);};

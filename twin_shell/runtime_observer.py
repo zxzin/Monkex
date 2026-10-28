@@ -20,6 +20,7 @@ from typing import Any
 
 from .token_meter import TokenMeter
 from .task_view import result_version
+from .input_requests import InputRequests, unknown_input
 
 
 READ_LIMIT = 4 * 1024 * 1024
@@ -77,6 +78,8 @@ class Cursor:
     tool_calls: dict[str, float] = field(default_factory=dict)
     ended_tool_calls: dict[str, float] = field(default_factory=dict)
     runtime_issue: dict[str, Any] | None = None
+    input_requests: InputRequests = field(default_factory=InputRequests)
+    checked_at: float = 0
 
     def select_turn(self, turn_id: str) -> None:
         if self.turn_id != turn_id:
@@ -98,6 +101,7 @@ class Cursor:
         self.tool_calls.clear()
         self.ended_tool_calls.clear()
         self.runtime_issue = None
+        self.input_requests = InputRequests()
 
     def observe_phase(self, envelope: str, payload: dict[str, Any], at: float) -> None:
         """Record the latest event category, with bounded tool-call pairing.
@@ -158,6 +162,8 @@ class Cursor:
                 "activity_fresh": activity_fresh, "observation_available": True,
                 "live_activity_at": self.live_activity_at, "live_activity_fresh": live_activity_fresh,
                 "runtime_issue": issue,
+                "input_request": self.input_requests.snapshot(turn_id=self.turn_id, observed_at=self.checked_at,
+                                                               active=self.status == "running"),
                 "activity_at": self.activity_at, "phase": self.phase, "phase_at": self.phase_at,
                 "model": self.model, "effort": self.effort, "pending_tools": len(self.tool_calls),
                 "result_turn_id": self.result_turn_id, "result_version": self.result_version,
@@ -241,6 +247,7 @@ class LocalRuntimeObserver:
                         block = stream.read(READ_LIMIT)
                     cursor.offset = start + len(block)
                     self._consume(cursor, block, thread_id)
+                    cursor.checked_at = self.clock()
                     self._available.add(thread_id)
                 except (OSError, ValueError):
                     continue
@@ -303,6 +310,7 @@ class LocalRuntimeObserver:
                 if not cursor.anchored:
                     cursor.turn_started_at = at
                 cursor.status, cursor.turn_id, cursor.anchored = "running", turn_id, True
+                cursor.input_requests.complete = True
                 cursor.activity_at = cursor.event_at = at
             return
         if envelope == "event_msg" and kind in {"task_complete", "turn_aborted"}:
@@ -319,6 +327,7 @@ class LocalRuntimeObserver:
             cursor.ended_tool_calls.clear()
             cursor.phase, cursor.phase_at = "waiting", at
             cursor.runtime_issue = _terminal_issue(payload.get("error"), cursor.turn_id, at) if cursor.status == "failed" else None
+            cursor.input_requests = InputRequests(complete=True)
             # The desktop completion envelope remains authoritative when the
             # paginated history API lags. Retain only its identity and digest.
             final = payload.get("last_agent_message")
@@ -327,6 +336,14 @@ class LocalRuntimeObserver:
                 cursor.result_version = result_version(turn_id, final)
                 cursor.result_completed_at = at
             return
+        if (envelope == "event_msg" and kind == "item_completed"
+                and turn_id and (not cursor.turn_id or turn_id == cursor.turn_id)
+                and cursor.status not in {"completed", "failed", "interrupted"}):
+            item = payload.get("item")
+            if isinstance(item, dict) and item.get("type") in {"UserMessage", "userMessage", "SteeringUserMessage", "steeringUserMessage"}:
+                if not cursor.turn_id:
+                    cursor.select_turn(turn_id)
+                cursor.input_requests.observe(item)
         # Context associates later legacy activity with a turn without itself
         # proving activity. Quoted events inside message bodies are never read.
         if envelope == "turn_context":
@@ -341,7 +358,7 @@ class LocalRuntimeObserver:
         progress = (envelope == "event_msg" and kind in PROGRESS_EVENTS) or (envelope == "response_item" and (kind in PROGRESS_ITEMS or (kind == "message" and payload.get("role") == "assistant" and payload.get("phase") == "commentary")))
         if kind in {"item_started", "item_completed"}:
             item = payload.get("item")
-            if not isinstance(item, dict) or item.get("type") in {"UserMessage", "userMessage"}:
+            if not isinstance(item, dict) or item.get("type") in {"UserMessage", "userMessage", "SteeringUserMessage", "steeringUserMessage"}:
                 progress = False
         if not progress or (turn_id and turn_id in cursor.terminal_ids):
             return
@@ -355,6 +372,8 @@ class LocalRuntimeObserver:
             cursor.select_turn(turn_id)
         if turn_id and cursor.telemetry_turn_id != turn_id:
             cursor.reset_activity_metadata(turn_id)
+        if envelope == "event_msg" and kind == "item_completed":
+            cursor.input_requests.observe(payload.get("item"))
         cursor.observe_phase(envelope, payload, at)
         cursor.status = "running"
         cursor.activity_at = cursor.event_at = at
@@ -370,12 +389,26 @@ class LocalRuntimeObserver:
                     "activity_at": 0, "phase": "unknown", "phase_at": 0,
                     "live_activity_at": 0, "live_activity_fresh": False,
                     "model": None, "effort": None, "pending_tools": 0,
-                    "activity_fresh": False, "observation_available": False, "runtime_issue": None}
+                    "activity_fresh": False, "observation_available": False, "runtime_issue": None,
+                    "input_request": unknown_input()}
         evidence = cursor.snapshot(now)
         if thread_id not in self._available:
             evidence.update(observation_available=False, activity_fresh=False, live_activity_fresh=False)
+            evidence["input_request"]["available"] = False
             evidence["revision"] += ":unavailable"
         return evidence
+
+    def observe_input_items(self, thread_id: str, turn_id: str, items: Any) -> None:
+        """Fill a bounded-tail gap from the existing full-turn history response.
+
+        Reply tombstones from either source win over repeated question events.
+        Importing history adds no runtime activity or execution authority.
+        """
+        with self._lock:
+            cursor = self._cursors.get(thread_id)
+            if (cursor and thread_id in self._available and cursor.turn_id == turn_id
+                    and cursor.status == "running"):
+                cursor.input_requests.merge(InputRequests.from_items(items))
 
     def diagnostics_snapshot(self, thread_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
         """Capture one turn's activity and usage under the same lock and clock."""

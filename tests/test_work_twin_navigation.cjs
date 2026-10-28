@@ -52,6 +52,18 @@ async function run(){
   assert.equal(f.cards[0].unread,true,'an older result stays pending while a turn is running');
   assert.equal(f.armed.length,0);assert.equal(f.rewards.length,0);
 
+  f=fixture();await f.nav.navigate('a',{acknowledge:false});
+  assert.equal(f.calls.length,1,'input reminder navigation opens without acknowledging a result');
+  assert.equal(f.cards[0].unread,true);assert.equal(f.armed.length,0);assert.equal(f.rewards.length,0);
+  f=fixture([card('a',{input_request:{pending:true}})]);await f.nav.navigate('a');
+  assert.equal(f.calls.length,1,'a pending input request always preserves an existing unread result');
+  assert.equal(f.cards[0].unread,true);assert.equal(f.armed.length,0);assert.equal(f.rewards.length,0);
+  f=fixture();gate=deferred();f.api=async()=>gate.promise;
+  const awaitingInput=f.nav.navigate('a');await tick();f.cards[0].input_request={pending:true};
+  gate.resolve({ok:true});await awaitingInput;
+  assert.equal(f.calls.length,1,'a question arriving while navigation is pending cancels the read receipt');
+  assert.equal(f.cards[0].unread,true);assert.equal(f.rewards.length,0);
+
   // A new result arriving during opening or acknowledgement remains unread.
   for(const step of ['open','ack']){
     f=fixture();gate=deferred();f.api=async url=>url.endsWith('/'+step)?gate.promise:{ok:true};
@@ -86,7 +98,15 @@ async function run(){
   const root=path.join(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
   const config=JSON.parse(read('desktop_shell/src-tauri/tauri.conf.json'));
   assert.deepEqual(config.app.windows.map(w=>w.label),['main']);
-  assert.deepEqual(JSON.parse(read('desktop_shell/src-tauri/capabilities/default.json')).windows,['main']);
+  const boardCapability=JSON.parse(read('desktop_shell/src-tauri/capabilities/default.json'));
+  assert.deepEqual(boardCapability.windows,['main']);
+  const reminderCapability=JSON.parse(read('desktop_shell/src-tauri/capabilities/reminders.json'));
+  assert.deepEqual(reminderCapability.windows,['input-reminders']);
+  assert.deepEqual(reminderCapability.permissions,['allow-read-input-reminders'],'the independent reminder window has only its scoped reminder capability');
+  assert.match(read('desktop_shell/src-tauri/permissions/set-pet-view.toml'),/identifier = "allow-read-input-reminders"[\s\S]*commands.allow = \["get_input_reminders", "set_input_reminder_interaction", "set_input_reminder_page", "dismiss_input_reminder"\]/,'the reminder capability manages its own pointer-safe pages and local dismissal state');
+  assert.ok(boardCapability.permissions.includes('allow-sync-input-reminders'));
+  assert.ok(!reminderCapability.permissions.includes('allow-sync-input-reminders'));
+  assert.ok(!boardCapability.permissions.includes('allow-read-input-reminders'));
   for(const file of ['shell/index.html','shell/app.js','desktop_shell/src-tauri/src/lib.rs']){
     const source=read(file);
     for(const obsolete of ['detailView','open_task_detail','close_task_detail','get_detail_target','DetailState','panel=detail']){
@@ -94,9 +114,9 @@ async function run(){
     }
   }
   const source=read('shell/app.js');
-  assert.ok(source.includes('state.navigation.navigate(id)'));
+  assert.ok(source.includes('state.navigation.navigate(id,{acknowledge:!awaitingInput})'));
   assert.ok(read('shell/index.html').includes('/shell/task-navigation.js'));
   for(const route of ['/messages','/interrupt','/respond','/api/pending'])assert.ok(!source.includes(route),'task replies and approvals stay in Codex');
-  console.log('PASS: exact navigation, success-before-read, duplicates, failures, new-result races, latest target ordering and single native window');
+  console.log('PASS: exact navigation, success-before-read, duplicates, failures, new-result races, latest target ordering, one board and an isolated reminder window');
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});

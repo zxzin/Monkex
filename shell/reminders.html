@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light"><title>Monkex</title>
+  <link rel="stylesheet" href="/shell/reminders.css">
+</head>
+<body>
+  <main id="reminderSurface" class="reminder-surface" aria-label="Monkex">
+    <div id="reminderList" class="reminder-list"></div>
+    <nav id="reminderPages" class="reminder-pages" hidden>
+      <button id="reminderPrevious" type="button" aria-label="Previous">‹</button>
+      <span id="reminderPageLabel"></span>
+      <button id="reminderNext" type="button" aria-label="Next">›</button>
+    </nav>
+    <p id="reminderEmpty" class="reminder-empty" role="status"></p>
+    <span id="reminderAnnouncement" class="sr-only" role="status" aria-live="polite"></span>
+  </main>
+  <script src="/shell/reminders.js" defer></script>
+</body>
+</html>

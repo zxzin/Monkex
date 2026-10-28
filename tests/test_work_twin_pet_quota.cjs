@@ -5,11 +5,12 @@ const source=read('shell/app.js'),html=read('shell/index.html'),css=read('shell/
 const elements=new Map();
 const $=id=>{if(!elements.has(id))elements.set(id,{dataset:{},style:{setProperty(k,v){this[k]=v}},children:[],parts:{},getClientRects:()=>[{}],querySelector(key){return this.parts[key]??= {style:{},animations:[],getAnimations(){return[]},animate(frames,options){this.animations.push({frames,options})}}},setAttribute(k,v){this[k]=v;}});return elements.get(id);};
 const now=Date.now()/1000;
-const state={connected:true,weeklyUsage:{available:true,remaining_percent:68,observed_at:now,resets_at:now+3600}};
+const state={threads:[],connected:true,weeklyUsage:{available:true,remaining_percent:68,observed_at:now,resets_at:now+3600}};
 let unread=2,running=1;
 const ctx={state,$,Date,document:{hidden:false},window:{matchMedia:()=>({matches:false}),WorkTwinBananaTree:require('../shell/banana-tree.js')},
   displayStatus:t=>t.unread?'unread':'running',boardSets:()=>({board:[...Array.from({length:unread},()=>({unread:true})),...Array.from({length:running},()=>({status:'running'}))],recent:Array.from({length:unread},()=>({unread:true})),history:[]})};
 vm.createContext(ctx);
+vm.runInContext(source.slice(source.indexOf('function inputRequestState('),source.indexOf('function displayStatus(')),ctx);
 vm.runInContext(source.slice(source.indexOf('function updateCounts('),source.indexOf('function activityTime(')),ctx);
 function verify(value,tone){ctx.updateCounts();assert.equal($('petQuotaRemaining').textContent,value);assert.equal($('weeklyRemaining').textContent,value);assert.equal($('petQuota').dataset.state,tone);assert.ok($('weeklyQuota').title.startsWith($('petQuota').title));}
 verify('68%','normal');

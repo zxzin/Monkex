@@ -88,10 +88,10 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .health-badge:hover:not(:disabled){background:var(--green-soft)}
 .health-badge:active{transform:scale(.96)}
 .health-badge[aria-expanded=true]{box-shadow:inset 0 0 0 1px currentColor}
-.health-heart{display:block;width:18px;height:18px;flex:none;fill:currentColor;shape-rendering:crispEdges}
-.health-reading{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:20px}
+.health-heart{display:block;width:18px;height:18px;flex:none;fill:currentColor;shape-rendering:crispEdges;position:relative;top:-4px}
+.health-reading{display:flex;align-items:center;justify-content:center;min-width:20px;height:18px;position:relative;top:-4px}
 .health-reading strong{font:700 13px/14px var(--hud-font);font-variant-numeric:tabular-nums;letter-spacing:-.25px;text-align:center}
-.health-caption{font-size:7px;line-height:8px;font-weight:500;white-space:nowrap;color:var(--muted)}
+.health-caption{position:absolute;inset:auto 0 1px;font-size:8px;line-height:10px;font-weight:600;white-space:nowrap;text-align:center;color:currentColor}
 .health-runtime-alert{position:absolute;right:0;top:-3px;width:6px;height:6px;border-radius:50%;background:var(--yellow-ink);box-shadow:0 0 0 1px var(--paper)}
 .health-runtime-alert[data-level=warning]{background:var(--red)}
 .health-runtime-alert[data-level=unknown]{background:var(--muted)}
@@ -106,6 +106,16 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .health-connection-score{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:9px;padding-top:6px;border-top:1px solid var(--line)}
 .health-connection-score strong{color:var(--ink)}
 .health-connection-score span:last-child{margin-left:auto;font-size:8px}
+.health-tier-heading{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin:5px 0 3px;color:var(--ink)}
+.health-tier-heading strong{font-size:12px;font-weight:700}
+.health-tier-heading>span{font:500 9px/1.4 var(--hud-font);color:var(--muted);white-space:nowrap}
+.health-tier-scale{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;list-style:none;padding:0;margin:8px 0;color:var(--muted)}
+.health-tier-step{display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 1px;border-radius:5px;font-size:8px;white-space:nowrap}
+.health-tier-step strong{font-size:9px;font-weight:500}
+.health-tier-step[aria-current=true]{background:var(--green-soft);color:var(--green-ink);box-shadow:inset 0 0 0 1px var(--leaf-rim)}
+.health-tier-step[aria-current=true] strong{font-weight:750}
+.health-tier-step[data-tier=mixed][aria-current=true]{background:var(--yellow-soft);color:var(--yellow-ink);box-shadow:inset 0 0 0 1px var(--fruit-rim)}
+.health-tier-step[data-tier=poor][aria-current=true]{background:var(--red-soft);color:var(--red-ink);box-shadow:inset 0 0 0 1px var(--red-ink)}
 .health-detail-heading button{width:20px;height:20px;padding:0;border-radius:6px;font-size:17px;color:var(--muted)}
 @media(max-width:320px){.topbar{gap:3px;padding-inline:8px}.heading h1{font-size:12px;gap:3px}.health-badge{flex-basis:40px;width:40px;height:30px;gap:1px}.health-heart{width:16px;height:16px}.quota-reset-toggle{font-size:8px;gap:2px;padding-inline:2px}.weekly-quota strong{font-size:11px}.topbar .pin-button{width:25px;padding-inline:2px}.topbar .icon-button{width:22px}.topbar .quota-coin-button{flex-basis:23px;width:23px}.weekly-quota{margin-right:0}}
 .runtime-health-body{max-height:180px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:0 8px 8px;font-size:9px;line-height:1.55;color:var(--ink)}
@@ -118,6 +128,8 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .health-token-context{display:flex;justify-content:space-between;gap:6px;color:var(--muted);font-size:8px}
 .health-token-context strong{font:600 9px/15px var(--hud-font);color:var(--ink)}
 .health-subline{margin:2px 0 7px;color:var(--muted)}
+.health-exit{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:4px 0 7px;color:var(--muted);font-size:9px}
+.health-exit strong{min-width:0;color:var(--ink);font-size:9px;font-weight:550;text-align:right;overflow-wrap:anywhere}
 .health-network>div{display:flex;flex-direction:column;gap:1px}
 .health-network strong{font-size:9px;font-weight:550;font-variant-numeric:tabular-nums}
 .health-network strong[data-state=reachable]{color:var(--green-ink)}
@@ -219,6 +231,12 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .task-title-line{display:flex;gap:6px;align-items:center;min-width:0}
 .task-copy strong{font-size:12px;font-weight:650;display:block;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:16px;color:var(--ink)}
 .row-status{font-size:9px;line-height:14px;flex:none;color:var(--muted);font-weight:500;white-space:nowrap;padding:0 5px;border-radius:0;clip-path:var(--pixel-corners)}
+.input-bubble{position:relative;flex:none;padding:1px 6px;border-radius:7px 7px 7px 2px;background:var(--yellow);color:var(--yellow-ink);font-size:9px;font-weight:600;line-height:14px;white-space:nowrap;box-shadow:inset 0 0 0 1px #dfb62d55}
+.input-bubble::after{content:"";position:absolute;left:3px;bottom:-3px;width:5px;height:4px;background:inherit;clip-path:polygon(0 0,100% 0,100% 50%,50% 50%,50% 100%,0 100%)}
+.task-button[data-status=waiting]{background:#eaf4ed;border-color:#b9d9c0}
+.task-button[data-status=waiting]:is(:hover,:focus-visible){background:#deede3}
+.task-button[data-status=waiting] .task-state{height:16px;margin-top:0;background:var(--banana-green-image) center/12px no-repeat;image-rendering:pixelated}
+.row-input-hint{flex:none;color:#1957ac;font-size:9px;white-space:nowrap}
 .task-button:is([data-status=running],[data-status=unread]) .row-status::before{content:"";display:inline-block;width:5px;height:5px;margin-right:3px;vertical-align:1px;background:currentColor}
 .task-button[data-status=running] .row-status::before{border-radius:50%;animation:status-pulse 1.2s steps(2,end) infinite}
 .task-button[data-status=unread] .row-status::before{clip-path:polygon(0 0,100% 0,100% 60%,60% 60%,60% 100%,0 100%)}
@@ -265,6 +283,10 @@ button:hover:not(:disabled){background:var(--leaf-hover)}
 .empty-note{margin:0;padding:40px 24px;line-height:1.9;color:var(--muted);text-align:center;font-size:12px}
 .system-banner{font-size:11px;line-height:1.6;padding:8px 12px;background:#fff5df;color:#805813;border-block:1px solid #f8e8bb;flex:none;max-height:90px;overflow:auto}
 .pet-shell{position:fixed;inset:0;width:76px;height:76px}
+.pet-input-bubble{position:absolute;z-index:4;right:0;top:0;min-width:22px;height:18px;padding:1px 4px;border:1px solid #8bb7ee;border-radius:7px 7px 7px 2px;background:#e4efff;color:#1957ac;font:700 10px/14px var(--hud-font);font-variant-numeric:tabular-nums;box-shadow:0 1px 2px #183b2720;touch-action:manipulation}
+.pet-input-bubble::after{content:"";position:absolute;left:2px;bottom:-4px;width:5px;height:5px;background:#e4efff;border-left:1px solid #8bb7ee;clip-path:polygon(0 0,100% 0,0 100%)}
+.pet-input-bubble:hover:not(:disabled){background:#d4e6ff}
+.pet-input-bubble:focus-visible{outline:2px solid #1957ac;outline-offset:-2px}
 html.pet-mode,html.pet-mode body{background:transparent;min-width:76px}
 .pet-mode .app-shell{margin:0;width:min(344px,100vw);height:min(var(--board-height,420px),100dvh);min-height:0;box-shadow:inset 0 1px 0 #fff;border:1px solid var(--leaf-rim)}
 @supports (backdrop-filter:blur(1px)){.app-shell{background:var(--glass);backdrop-filter:blur(22px) saturate(115%)}}
