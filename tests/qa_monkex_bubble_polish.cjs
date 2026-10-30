@@ -31,18 +31,19 @@ const settle=page=>page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,330
     await settle(page);
     const initial=await page.evaluate(()=>{
       const row=document.querySelector('.reminder-row');window.__polishFirstRow=row;
-      const bubble=row.querySelector('.reminder-bubble'),title=row.querySelector('.reminder-title'),detail=row.querySelector('.reminder-detail'),arrow=row.querySelector('.reminder-arrow');
+      const bubble=row.querySelector('.reminder-bubble'),title=row.querySelector('.reminder-title'),detail=row.querySelector('.reminder-detail'),action=row.querySelector('.reminder-action');
       const box=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom};};
-      const cs=getComputedStyle(bubble),arrowStyle=getComputedStyle(arrow),rowStyle=getComputedStyle(row);
-      return {row:box(row),bubble:box(bubble),title:box(title),detail:box(detail),arrow:box(arrow),radius:cs.borderTopLeftRadius,arrowRadius:arrowStyle.borderRadius,animationName:rowStyle.animationName,animations:window.__polishAnimations.slice(),scroll:document.documentElement.scrollWidth};
+      const cs=getComputedStyle(bubble),actionStyle=getComputedStyle(action),rowStyle=getComputedStyle(row);
+      return {row:box(row),bubble:box(bubble),title:box(title),detail:box(detail),action:box(action),actionText:action.textContent,actionSvg:action.querySelectorAll('svg').length,radius:cs.borderTopLeftRadius,actionRadius:actionStyle.borderRadius,animationName:rowStyle.animationName,animations:window.__polishAnimations.slice(),scroll:document.documentElement.scrollWidth};
     });
-    assert.equal(initial.scroll,196);assert.equal(initial.bubble.height,46);assert.equal(initial.bubble.width,184);assert.equal(initial.arrow.width,24);assert.equal(initial.arrow.height,24);
-    assert.ok(initial.title.right<=initial.arrow.x-2,'title stays clear of the circular reply cue');
-    assert.ok(initial.detail.right<=initial.arrow.x-2,'secondary text stays clear of the reply cue');
+    assert.equal(initial.scroll,196);assert.equal(initial.bubble.height,46);assert.equal(initial.bubble.width,184);assert.equal(initial.action.width,32);assert.equal(initial.action.height,24);
+    assert.equal(initial.actionText,lang==='en'?'View':'查看');assert.equal(initial.actionSvg,0,'the compact action uses a text label');
+    assert.ok(initial.title.right<=initial.action.x-2,'title stays clear of the compact text action');
+    assert.ok(initial.detail.right<=initial.action.x-2,'secondary text stays clear of the text action');
     assert.ok(initial.title.bottom<=initial.detail.y,'title and state have separate lines');
-    assert.ok(initial.title.x>=initial.bubble.x&&initial.arrow.right<=initial.bubble.right);
+    assert.ok(initial.title.x>=initial.bubble.x&&initial.action.right<=initial.bubble.right);
     assert.ok(parseFloat(initial.radius)>=15,'the bubble has a soft continuous outline');
-    assert.ok(initial.arrowRadius.includes('50%')||parseFloat(initial.arrowRadius)>=12,'the reply cue remains circular');
+    assert.equal(parseFloat(initial.actionRadius),8,'the text action uses a compact rounded rectangle');
     if(motion==='reduce')assert.equal(initial.animations.length,0,'reduced motion prevents entry animation');
     else assert.equal(initial.animations.filter(event=>event.thread==='polish-demo-0').length,1,'the first bubble enters exactly once');
     const starts=initial.animations.length;
@@ -79,6 +80,7 @@ const settle=page=>page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,330
     await page.evaluate(()=>{document.documentElement.dataset.anchor='above';document.documentElement.style.setProperty('--reminder-tail-x','92px');});
     await page.locator('.reminder-bubble').first().click();await page.waitForFunction(()=>!window.__monkexReminderController.busy.size);
     assert.equal(writes.length,1);assert.equal(writes[0].path,'/api/threads/polish-demo-0/open-input');assert.equal(await page.locator('.reminder-bubble').first().getAttribute('data-state'),'error');
+    assert.equal(await page.locator('.reminder-action').first().innerText(),lang==='en'?'Retry':'重试','failed navigation names the retry action');
     assert.ok(await page.locator('.reminder-bubble').first().isEnabled());await page.screenshot({path:path.join(out,`${lang}-${motion}-error.png`)});
     await page.evaluate(async()=>{const snapshot=window.__MONKEX_REMINDER_FIXTURE__.snapshot;snapshot.stale=true;snapshot.revision++;await window.__monkexReminderController.refresh();});
     assert.ok(await page.locator('.reminder-bubble').first().isDisabled());assert.equal(await page.locator('.reminder-detail-text').first().innerText(),lang==='en'?'Pending sync':'待同步');
@@ -105,9 +107,9 @@ const settle=page=>page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,330
       const width=(await widthCalls()).at(-1).args.width;
       assert.ok(width>=152&&width<=196);assert.equal(width%2,0);
       await page.setViewportSize({width,height});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-      const geometry=await page.evaluate(()=>{const row=document.querySelector('.reminder-bubble'),title=row.querySelector('.reminder-title'),detail=row.querySelector('.reminder-detail-text'),arrow=row.querySelector('.reminder-arrow'),box=node=>node.getBoundingClientRect().toJSON();return {surface:box(document.querySelector('#reminderSurface')),bubble:box(row),title:box(title),detail:box(detail),arrow:box(arrow),scroll:document.documentElement.scrollWidth};});
+      const geometry=await page.evaluate(()=>{const row=document.querySelector('.reminder-bubble'),title=row.querySelector('.reminder-title'),detail=row.querySelector('.reminder-detail-text'),action=row.querySelector('.reminder-action'),box=node=>node.getBoundingClientRect().toJSON();return {surface:box(document.querySelector('#reminderSurface')),bubble:box(row),title:box(title),detail:box(detail),action:box(action),scroll:document.documentElement.scrollWidth};});
       assert.equal(geometry.surface.width,width);assert.equal(geometry.bubble.width,width-12);assert.equal(geometry.bubble.height,46);assert.equal(geometry.scroll,width);
-      assert.ok(geometry.title.right<=geometry.arrow.x-2&&geometry.detail.right<=geometry.arrow.x-2);
+      assert.ok(geometry.title.right<=geometry.action.x-2&&geometry.detail.right<=geometry.action.x-2);
       return {width,geometry};
     };
     const short=await applyViewport();if(lang==='zh')assert.equal(short.width,152,'a short Chinese task shrinks the bubble to its compact minimum');

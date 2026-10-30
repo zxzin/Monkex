@@ -22,6 +22,7 @@ from .runtime_observer import LocalRuntimeObserver
 from .diagnostics import ConnectionMonitor, runtime_diagnostics
 from .weekly_quota import weekly_quota, primary_usage, quota_details
 from .platform_support import data_directory, open_codex_thread
+from . import usage_frequency
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -416,8 +417,7 @@ class WorkTwinShell:
         return {"ok": True, "weekly_harvest": harvest}
 
     def open_thread(self, thread_id: str) -> dict[str, Any]:
-        import re
-        if not re.fullmatch(r"[a-zA-Z0-9_-]{1,100}", thread_id):
+        if not usage_frequency.valid_thread_id(thread_id):
             raise WorkTwinShellError("任务 ID 无效")
         self._result_or_raise(self.client.request("thread/read", {"threadId": thread_id, "includeTurns": False}), "定位原任务")
         # This route is present in the installed desktop application's URL handler.
@@ -430,9 +430,8 @@ class WorkTwinShell:
         The official deep link targets a thread. The question identity is a
         freshness guard; this endpoint never answers, acknowledges or sends.
         """
-        import re
         from .input_requests import MAX_QUESTIONS, pending_input
-        if not re.fullmatch(r"[a-zA-Z0-9_-]{1,100}", thread_id):
+        if not usage_frequency.valid_thread_id(thread_id):
             raise WorkTwinShellError("任务 ID 无效")
         if (not isinstance(turn_id, str) or not 0 < len(turn_id) <= 256 or not turn_id.isprintable()
                 or not isinstance(question_id, str) or not 0 < len(question_id) <= 512):
@@ -599,11 +598,12 @@ class WorkTwinShell:
 
     def _load_state(self) -> dict[str, Any]:
         if not self.state_path.is_file():
-            return {"schema_version": 2, "settings": {}, "tasks": {}, "observations": {}, "outbox": {}}
-        try:
-            value = json.loads(self.state_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise WorkTwinShellError("工作分身壳子状态损坏") from error
+            value = {"schema_version": 2, "settings": {}, "tasks": {}, "observations": {}, "outbox": {}}
+        else:
+            try:
+                value = json.loads(self.state_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as error:
+                raise WorkTwinShellError("工作分身壳子状态损坏") from error
         if not isinstance(value, dict) or value.get("schema_version") not in {1, 2}:
             raise WorkTwinShellError("工作分身壳子状态版本不兼容")
         value["schema_version"] = 2
@@ -611,6 +611,7 @@ class WorkTwinShell:
             if not isinstance(value.setdefault(key, {}), dict):
                 raise WorkTwinShellError("工作分身壳子状态结构损坏")
         value["settings"].pop("stop_percent", None)
+        value.pop("open_frequency", None)
         return value
 
     def _save_state(self) -> None:

@@ -42,6 +42,6 @@ for(const lang of ['zh','en']){
   assert.ok(Array.from(ctx.boardSets().board,card=>card.id).includes('old-input'),'an open input request remains visible beyond the recent window');
   state.threads[3].input_request={pending:false,available:true,observed_at:now};
   assert.ok(!Array.from(ctx.boardSets().board,card=>card.id).includes('old-input'),'resolved old input leaves the board');
-  state.filter='history';assert.ok(!Array.from(ctx.filtered(),card=>card.id).includes('input'),'current input requests stay out of history');
+  state.filter='frequent';assert.ok(!Array.from(ctx.filtered(),card=>card.id).includes('input'),'an input request alone does not establish repeated user conversations');
 }
 console.log('PASS: bilingual input bubbles, fresh/unknown/resolved states, retained token activity, pending membership and priority.');

@@ -21,6 +21,7 @@ from typing import Any
 from .token_meter import TokenMeter
 from .task_view import result_version
 from .input_requests import InputRequests, unknown_input
+from .usage_frequency import RunFrequency, unknown_frequency, BACKFILL_BUDGET
 
 
 READ_LIMIT = 4 * 1024 * 1024
@@ -80,6 +81,7 @@ class Cursor:
     runtime_issue: dict[str, Any] | None = None
     input_requests: InputRequests = field(default_factory=InputRequests)
     checked_at: float = 0
+    frequency: RunFrequency = field(default_factory=RunFrequency)
 
     def select_turn(self, turn_id: str) -> None:
         if self.turn_id != turn_id:
@@ -178,6 +180,7 @@ class LocalRuntimeObserver:
         self._lock = threading.RLock()
         self._cursors: dict[str, Cursor] = {}
         self._available: set[str] = set()
+        self._backfill_cursor = 0
         self.error = False
 
     def refresh(self, thread_ids: list[str]) -> None:
@@ -206,6 +209,7 @@ class LocalRuntimeObserver:
                 self.error = True
                 self._available.difference_update(thread_ids)
                 return
+            history = []
             for thread_id in thread_ids:
                 self._available.discard(thread_id)
                 thread_metadata = metadata.get(thread_id)
@@ -245,12 +249,28 @@ class LocalRuntimeObserver:
                             cursor.reset_activity_metadata()
                         stream.seek(start)
                         block = stream.read(READ_LIMIT)
+                    if cursor.offset == 0 or start != cursor.offset:
+                        cursor.frequency.seed_tail(start, block, self.clock())
                     cursor.offset = start + len(block)
                     self._consume(cursor, block, thread_id)
                     cursor.checked_at = self.clock()
                     self._available.add(thread_id)
+                    if not cursor.frequency.complete:
+                        history.append((thread_id, path, cursor))
                 except (OSError, ValueError):
                     continue
+            # One shared historical IO budget keeps startup/refresh bounded.
+            budget = BACKFILL_BUDGET
+            for offset in range(len(history)):
+                index = (self._backfill_cursor + offset) % len(history)
+                thread_id, path, cursor = history[index]
+                try:
+                    budget -= cursor.frequency.backfill(path, thread_id, self.clock(), budget)
+                except (OSError, ValueError):
+                    cursor.frequency.mark_gap(self.clock())
+                if budget <= 0:
+                    self._backfill_cursor = (index + 1) % len(history)
+                    break
 
     def _consume(self, cursor: Cursor, block: bytes, thread_id: str) -> None:
         data = cursor.pending + block
@@ -262,17 +282,30 @@ class LocalRuntimeObserver:
                 cursor.skipping = False
                 continue
             if len(line) > LINE_LIMIT:
+                cursor.frequency.mark_gap(self.clock())
                 continue
             try:
                 record = json.loads(line)
                 if isinstance(record, dict):
+                    cursor.frequency.observe(record, thread_id, self.clock())
                     self._event(cursor, record, thread_id)
             except (ValueError, TypeError, OverflowError, RecursionError):
+                cursor.frequency.mark_gap(self.clock())
                 continue
         if len(remainder) > LINE_LIMIT:
+            cursor.frequency.mark_gap(self.clock())
             cursor.skipping = True
         else:
             cursor.pending = remainder
+
+    def frequency_snapshot(self, thread_id: str) -> dict[str, Any]:
+        with self._lock:
+            cursor = self._cursors.get(thread_id)
+            if self.error or thread_id not in self._available or not cursor:
+                return unknown_frequency()
+            result = cursor.frequency.snapshot(self.clock())
+            result["observed_at"] = cursor.checked_at
+            return result
 
     def _event(self, cursor: Cursor, record: dict[str, Any], thread_id: str) -> None:
         envelope = record.get("type")

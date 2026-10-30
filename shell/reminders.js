@@ -2,13 +2,14 @@
 (function(scope){
   const PAGE_SIZE=3;
   const COPY={
-    zh:{heading:"需要你回复",reply:n=>`待回复 · ${n} 问`,stale:"待同步",opening:"正在打开…",opened:"已打开 Codex",changed:"提醒已更新，请重新查看",failed:"打开失败 · 点击重试",unavailable:"等待桌面连接",empty:"当前没有待回复任务",previous:"上一页提醒",next:"下一页提醒",pages:(p,n,total)=>`${p} / ${n} · ${total} 项`,action:"在 Codex 中去回复",go:"回复 ↗",retry:"重试 ↗"},
-    en:{heading:"Needs reply",reply:n=>`${n} ${n===1?'question':'questions'} to reply`,stale:"Pending sync",opening:"Opening…",opened:"Opened in Codex",changed:"Reminder changed · Check again",failed:"Couldn't open · Retry",unavailable:"Waiting for desktop",empty:"No pending replies",previous:"Previous reminders",next:"Next reminders",pages:(p,n,total)=>`${p} / ${n} · ${total} tasks`,action:"Reply in Codex",go:"Reply ↗",retry:"Retry ↗"}
+    zh:{heading:"需要你回复",reply:n=>`待回复 · ${n} 问`,stale:"待同步",opening:"正在打开…",opened:"已打开 Codex",changed:"提醒已更新，请重新查看",failed:"打开失败 · 点击重试",unavailable:"等待桌面连接",empty:"当前没有待回复任务",previous:"上一页提醒",next:"下一页提醒",pages:(p,n,total)=>`${p} / ${n} · ${total} 项`,action:"在 Codex 中查看并回复",go:"查看",retry:"重试"},
+    en:{heading:"Needs reply",reply:n=>`${n} ${n===1?'question':'questions'} to reply`,stale:"Pending sync",opening:"Opening…",opened:"Opened in Codex",changed:"Reminder changed · Check again",failed:"Couldn't open · Retry",unavailable:"Waiting for desktop",empty:"No pending replies",previous:"Previous reminders",next:"Next reminders",pages:(p,n,total)=>`${p} / ${n} · ${total} tasks`,action:"View and reply in Codex",go:"View",retry:"Retry"}
   };
   function targetKey(item){return JSON.stringify([item.thread_id,item.turn_id,item.question_id]);}
   function reminderContentWidth(widths){
     const valid=(Array.isArray(widths)?widths:[]).filter(value=>Number.isFinite(value)&&value>=0);
-    return Math.max(152,Math.min(196,Math.ceil((Math.max(0,...valid)+66)/2)*2));
+    // Surface 12 + border 2 + padding 20 + gap 8 + text action 32.
+    return Math.max(152,Math.min(196,Math.ceil((Math.max(0,...valid)+74)/2)*2));
   }
   function cleanItems(items){
     const seen=new Set();
@@ -122,10 +123,9 @@
       onChange:render
     });
     function createRow(item){
-      const row=document.createElement('div'),button=document.createElement('button'),copyNode=document.createElement('span'),title=document.createElement('span'),detail=document.createElement('span'),text=document.createElement('span'),arrow=document.createElement('span');
-      row.className='reminder-row';button.className='reminder-bubble';button.type='button';copyNode.className='reminder-copy';title.className='reminder-title';detail.className='reminder-detail';text.className='reminder-detail-text';arrow.className='reminder-arrow';arrow.setAttribute('aria-hidden','true');
-      arrow.innerHTML='<svg viewBox="0 0 20 20" width="16" height="16" focusable="false"><path d="M5.5 14.5 14 6M5.5 6H14v8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-      detail.append(text);copyNode.append(title,detail);button.append(copyNode,arrow);row.append(button);
+      const row=document.createElement('div'),button=document.createElement('button'),copyNode=document.createElement('span'),title=document.createElement('span'),detail=document.createElement('span'),text=document.createElement('span'),action=document.createElement('span');
+      row.className='reminder-row';button.className='reminder-bubble';button.type='button';copyNode.className='reminder-copy';title.className='reminder-title';detail.className='reminder-detail';text.className='reminder-detail-text';action.className='reminder-action';action.setAttribute('aria-hidden','true');
+      detail.append(text);copyNode.append(title,detail);button.append(copyNode,action);row.append(button);
       let pressed=null,moved=false;
       button.addEventListener('pointerdown',event=>{if(event.button===0){beginInteraction();pressed={target:{...row.item},x:event.clientX,y:event.clientY};moved=false;button.setPointerCapture?.(event.pointerId);event.stopPropagation();}});
       button.addEventListener('pointermove',event=>{if(pressed&&Math.hypot(event.clientX-pressed.x,event.clientY-pressed.y)>5)moved=true;});
@@ -133,7 +133,7 @@
       button.addEventListener('pointercancel',()=>{pressed=null;releaseInteraction();});
       button.addEventListener('dragstart',event=>event.preventDefault());
       button.addEventListener('click',event=>{event.stopPropagation();const target=event.detail===0?row.item:moved?null:pressed?.target||row.item;pressed=null;if(target)controller.open(target);});
-      return Object.assign(row,{button,titleNode:title,text,arrow,item});
+      return Object.assign(row,{button,titleNode:title,text,action,item});
     }
     function render(){
       if(interacting)return;
@@ -150,7 +150,7 @@
         const key=targetKey(item),busy=controller.busy.has(key),notice=controller.notices.get(key),tone=!item.available?'stale':busy?'busy':notice?.code==='failed'?'error':'ready';
         row.titleNode.textContent=item.title;row.button.dataset.state=tone;row.button.disabled=!item.available||busy;row.button.setAttribute('aria-busy',String(busy));
         row.text.textContent=!item.available?copy.stale:busy?copy.opening:notice?copy[notice.code]:copy.reply(item.count);
-        row.arrow.hidden=!item.available||busy;row.button.title=item.title+' · '+(item.available?copy.action:copy.stale);row.button.setAttribute('aria-label',row.button.title);
+        row.action.textContent=tone==='error'?copy.retry:copy.go;row.action.hidden=!item.available||busy;row.button.title=item.title+' · '+(item.available?copy.action:copy.stale);row.button.setAttribute('aria-label',row.button.title);
         const list=$("reminderList");if(list.children[index]!==row)list.insertBefore(row,list.children[index]||null);
       }
       const total=controller.items.length,pages=Math.ceil(total/PAGE_SIZE);

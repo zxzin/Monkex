@@ -179,7 +179,14 @@ function updateTaskRow(button,card) {
   if(status==="waiting")badge.title="Open Codex to reply; unread results stay unread.";
   title.append(badge);
   const meta=node("div","task-meta"),progress=node("span","stage",card.summary||card.project_label||"Task");
-  progress.title=card.summary?"Latest progress · "+card.summary:"";meta.append(progress);
+  progress.title=card.summary?"Latest progress · "+card.summary:"";
+  const frequency=usageFrequency(card);
+  if(state.filter==="frequent"&&frequency){
+    const count=node("span","frequency-count",(frequency.complete?"":"At least ")+frequency.count+" runs");
+    count.title="Distinct runs in 7 days: "+frequency.count+" runs · Active on "+frequency.days+" days · Weighted score "+frequency.score+"\nUnder 24h ×3, 1–3 days ×2, 3–7 days ×1; each turn counts once"+(frequency.complete?"":" · History scan in progress; observed lower bound")+(!state.connected||frequency.cached?" · Last observed count":"");
+    meta.append(count);button.title+="\n"+count.title;
+  }
+  meta.append(progress);
   if(status==="waiting"&&card.status!=="running"){
     const reply=node("span","row-input-hint","Reply ↗");meta.append(reply);
   }else if(status==="running"||status==="pending"||status==="waiting"){
@@ -259,7 +266,7 @@ function updateCounts() {
   const unread=groups.recent.filter(t=>displayStatus(t)==="unread").length;
   $("boardCount").textContent=groups.board.length;
   $("recentCount").textContent=groups.recent.length;
-  $("historyCount").textContent=groups.history.length;
+  $("frequentCount").textContent=(groups.frequent.length||frequencyReady())?String(groups.frequent.length):"—";
   const activity=window.WorkTwinBananaTree.activityState(unread,running,state.connected);
   const label=activity.label+(needsInput.length?" · "+needsInput.length+" chats need your reply":"");
   $("petLauncher").dataset.state=activity.state;
@@ -435,6 +442,7 @@ function renderHealthScore(data,now=Date.now()/1000) {
   const confidence=valid?{provisional:"Preliminary",short_check:"Short check"}[score.confidence]||"Preliminary":stale?"Retest needed":current||state.diagnosticsResetting?"Sampling":"Pending sync";
   const tiers=healthConnectionTiers(),rounded=valid?Math.round(score.value):null;
   const tier=valid?tiers.find(item=>rounded>=item.min&&rounded<=item.max):null;
+  $("healthFace").dataset.expression=tier?tier.key:"unknown";
   $("healthScoreValue").textContent=valid?Math.round(score.value)+" /100":"—";
   $("healthBadgeValue").textContent=valid?String(Math.round(score.value)):"—";
   $("healthBadgeTier").textContent=tier?tier.label:stale?"Retest":confidence==="Pending sync"?"Syncing":confidence;
@@ -560,6 +568,25 @@ function activityTime(card) {
   const times=[seconds(card.updated_at),seconds(card.runtime_observed_at)].filter(t=>Number.isFinite(t)&&t>0);
   return times.length?Math.max(...times):0;
 }
+function usageFrequency(card,now=Date.now()/1000) {
+  const usage=card.usage_frequency;
+  if(usage?.source!=="codex_run"||usage.window_days!==7||usage.available!==true||
+    !Number.isSafeInteger(usage.run_count)||usage.run_count<0||
+    !Number.isSafeInteger(usage.weighted_score)||usage.weighted_score<usage.run_count||usage.weighted_score>usage.run_count*3||
+    !Number.isInteger(usage.active_days)||usage.active_days<0||usage.active_days>Math.min(7,usage.run_count)||
+    !Number.isFinite(usage.observed_at)||usage.observed_at<=0||usage.observed_at>now+30)return null;
+  const last=usage.last_run_at;
+  if(usage.run_count===0?last!==null:usage.active_days===0||!Number.isFinite(last)||last<=0||last>now+30||last>usage.observed_at+30||last<=now-7*86400)return null;
+  return {count:usage.run_count,score:usage.weighted_score,days:usage.active_days,last:last||0,complete:usage.complete===true,cached:now-usage.observed_at>30};
+}
+function frequencyReady(now=Date.now()/1000) {
+  return state.connected&&state.threads.every(t=>{const frequency=usageFrequency(t,now);return frequency&&frequency.complete&&!frequency.cached;});
+}
+function frequencyPriority(card) {
+  if(card.input_request?.pending===true)return 1;
+  if(card.status==="running"||(card.status==="unknown"&&card.last_observed_status==="running"&&card.sync_pending===true))return 2;
+  return card.unread?0:2;
+}
 function boardSets(now=Date.now()/1000) {
   const active=t=>t.input_request?.pending===true||t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true);
   const age=t=>activityTime(t)?Math.max(0,now-activityTime(t)):Infinity;
@@ -567,13 +594,17 @@ function boardSets(now=Date.now()/1000) {
   return {
     recent,
     board:recent.filter(t=>active(t)||t.unread),
-    history:state.threads.filter(t=>!active(t)&&age(t)>86400&&age(t)<=7*86400),
+    frequent:state.threads.filter(t=>(usageFrequency(t,now)?.count||0)>=2),
   };
 }
 function filtered() {
+  const now=Date.now()/1000;
   const rank=t=>t.input_request?.pending===true?(t.unread?0:1):t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true)?3:state.filter==="recent"&&!t.unread?2:0;
-  const sorted=(boardSets()[state.filter]||[]).sort((a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
-  return projectGroups(sorted).flatMap(group=>group.cards);
+  const sorted=(boardSets(now)[state.filter]||[]).sort(state.filter==="frequent"?(a,b)=>{
+    const left=usageFrequency(a,now),right=usageFrequency(b,now);
+    return frequencyPriority(a)-frequencyPriority(b)||right.score-left.score||right.days-left.days||right.count-left.count||right.last-left.last||activityTime(b)-activityTime(a)||String(a.id).localeCompare(String(b.id));
+  }:(a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
+  return state.filter==="frequent"?sorted:projectGroups(sorted).flatMap(group=>group.cards);
 }
 function projectIdentity(card) {
   return String(card.cwd||card.project_label||"Unlinked tasks");
@@ -620,15 +651,19 @@ function renderList(force=false) {
   }
   state.queuedRender=false;
   const rows=[];
-  for(const group of projectGroups(wantedCards)){
-    rows.push(projectHeading(group));
+  for(const group of state.filter==="frequent"?[{cards:wantedCards}]:projectGroups(wantedCards)){
+    if(group.key)rows.push(projectHeading(group));
     for(const t of group.cards){
       const b=existing.get(t.id)||node("button","task-button");b.type="button";
       if(!existing.has(t.id))b.addEventListener("click",()=>selectThread(t.id));
       updateTaskRow(b,t);rows.push(b);
     }
   }
-  if(!rows.length)rows.push(node("p","empty-note",state.filter==="board"?(state.connected?"All caught up\nRecent results are in 24 hours":"Waiting for running status"):state.filter==="history"?"No tasks from 24 hours to 7 days ago":"No tasks in the last 24 hours"));
+  if(!rows.length){
+    const empty=state.filter==="board"?(state.connected?"No unread results or active tasks\nFind recent results under Recent":"Waiting for running status"):state.filter==="frequent"?
+      (frequencyReady()?"Conversations with at least 2 distinct runs in 7 days appear here":"Run frequency pending sync"):"No records from the last 24 hours";
+    rows.push(node("p","empty-note",empty));
+  }
   const scroll=$("taskList").scrollTop;
   $("taskList").replaceChildren(...rows);$("taskList").scrollTop=scroll;
   syncBoardSize();
@@ -684,7 +719,7 @@ function syncBoardSize(force=false,activate=true) {
   const health=$("runtimeHealth");
   const extra=bannerHeight+quotaHeight;
   const cards=filtered();
-  const height=Math.max(boardHeight(cards.length,extra,projectGroups(cards).length),health&&!health.hidden?300:0);
+  const height=Math.max(boardHeight(cards.length,extra,state.filter==="frequent"?0:projectGroups(cards).length),health&&!health.hidden?300:0);
   if(!force&&height===state.boardSize){positionHealthPopover();return;}
   state.boardSize=height;document.documentElement.style.setProperty("--board-height",height+"px");
   positionHealthPopover();

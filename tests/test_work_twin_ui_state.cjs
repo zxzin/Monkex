@@ -142,3 +142,25 @@ assert.equal(ctx.taskRunState({status:'running',runtime:{phase:'starting',observ
 assert.equal(ctx.taskRunState({status:'running',tokens:{ready:true,tokens_per_min:0}}).label,'等待上报');
 assert.equal(ctx.taskRunState({status:'running',runtime:{observation_available:false},tokens:{ready:true,tokens_per_min:0}}).label,'待同步');
 console.log('PASS: pending cards persist and zero reported usage has a runtime explanation.');
+
+state.connected=true;state.filter='frequent';state.listBusy=false;
+state.threads=[{id:'repeat',name:'Repeat task',status:'result_ready',unread:false,updated_at:now,summary:'Existing progress',
+  usage_frequency:{source:'codex_run',window_days:7,run_count:8,weighted_score:24,active_days:1,last_run_at:now,complete:true,observed_at:now,available:true}}];
+ctx.renderList(true);
+let frequencyRow=taskRows()[0];
+assert.equal(frequencyRow.children[1].children.length,2,'frequency keeps two compact lines');
+assert.equal(frequencyRow.children[1].children[1].children[0].textContent,'8次');
+assert.ok(frequencyRow.title.includes('近7天独立运行 8 次 · 活跃 1 天 · 加权分 24'));
+state.threads[0].usage_frequency.complete=false;ctx.renderList();
+assert.equal(taskRows()[0].children[1].children[1].children[0].textContent,'至少8次');
+assert.ok(taskRows()[0].title.includes('当前为已观察下界'));
+assert.equal(list.children.filter(row=>row.className==='project-heading').length,0,'frequent has no project headings');
+state.connected=false;ctx.renderList(true);
+assert.ok(taskRows()[0].title.includes('上次统计'));
+state.filter='recent';ctx.renderList(true);
+assert.equal(taskRows()[0].children[1].children[1].children[0].textContent,'Existing progress','other tabs preserve the existing progress layout');
+state.filter='frequent';state.threads=[{id:'unknown',name:'Unknown'}];ctx.renderList(true);
+assert.equal(list.children[0].textContent,'运行频次待同步');
+state.connected=true;state.threads=[{id:'once',name:'Once',usage_frequency:{source:'codex_run',window_days:7,run_count:1,weighted_score:3,active_days:1,last_run_at:now,complete:true,observed_at:now,available:true}}];ctx.renderList(true);
+assert.equal(list.children[0].textContent,'近7天独立运行满2次的对话收录到这里');
+console.log('PASS: compact run labels, flat frequent list, offline evidence and honest empty states.');

@@ -7,6 +7,7 @@ const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 (async()=>{
   assert.equal(PAGE_SIZE,3);assert.match(COPY.en.reply(2),/2 questions/);assert.match(COPY.zh.reply(2),/2 问/);
+  assert.deepEqual([COPY.zh.go,COPY.zh.retry,COPY.en.go,COPY.en.retry],['查看','重试','View','Retry'],'compact actions name the destination and retry state without decorative arrows');
   const normalized=cleanItems([item('a',{title:'🌴'.repeat(161),question:'private',answer:'private'}),item('a'),item('../bad'),item('b',{question_id:''})]);
   assert.equal(normalized.length,2);assert.equal(Array.from(normalized[0].title).length,160);assert.equal(normalized[1].available,false);
   assert.deepEqual(Object.keys(normalized[0]).sort(),['available','count','question_id','thread_id','title','turn_id']);
@@ -56,6 +57,10 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
   delete state.threads[0].input_request.target;assert.equal(context.inputReminderItems()[0].available,false,'a missing exact target stays unconfirmed');
   state.threads[0].input_request.pending=false;assert.equal(context.inputReminderItems().length,0);
   const child=fs.readFileSync(path.join(__dirname,'../shell/reminders.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../shell/reminders.css'),'utf8');
+  assert.ok(!child.includes('reminder-arrow')&&!child.includes('<svg')&&!css.includes('reminder-arrow'),'the reminder action has one text-only canonical element');
+  assert.match(child,/action\.className='reminder-action'/);assert.match(child,/row\.action\.textContent=tone==='error'\?copy\.retry:copy\.go/);
+  assert.match(css,/grid-template-columns:minmax\(0,1fr\) 32px/);assert.match(css,/\.reminder-action\{[^}]*width:32px;height:24px;border-radius:8px/,'the fixed action width matches the 74px native content budget');
   assert.ok(!child.includes('/ack')&&!child.includes('set_pet_view')&&!child.includes('/api/diagnostics')&&!child.includes('localStorage')&&!child.includes('sessionStorage'),'independent reminders never expand, acknowledge, probe or persist content');
   assert.match(child,/question_id:item.question_id/);assert.ok(changes>0);
   const capability=JSON.parse(fs.readFileSync(path.join(__dirname,'../desktop_shell/src-tauri/capabilities/reminders.json')));

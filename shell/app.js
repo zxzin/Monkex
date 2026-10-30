@@ -178,7 +178,14 @@ function updateTaskRow(button,card) {
   if(status==="waiting")badge.title="点击回到 Codex 回复；保留未读结果";
   title.append(badge);
   const meta=node("div","task-meta"),progress=node("span","stage",card.summary||card.project_label||"任务");
-  progress.title=card.summary?"最近进展 · "+card.summary:"";meta.append(progress);
+  progress.title=card.summary?"最近进展 · "+card.summary:"";
+  const frequency=usageFrequency(card);
+  if(state.filter==="frequent"&&frequency){
+    const count=node("span","frequency-count",(frequency.complete?"":"至少")+frequency.count+"次");
+    count.title="近7天独立运行 "+frequency.count+" 次 · 活跃 "+frequency.days+" 天 · 加权分 "+frequency.score+"\n24小时内×3，1–3天×2，3–7天×1；同一回合计1次"+(frequency.complete?"":" · 历史仍在回溯，当前为已观察下界")+(!state.connected||frequency.cached?" · 上次统计":"");
+    meta.append(count);button.title+="\n"+count.title;
+  }
+  meta.append(progress);
   if(status==="waiting"&&card.status!=="running"){
     const reply=node("span","row-input-hint","去回复 ↗");meta.append(reply);
   }else if(status==="running"||status==="pending"||status==="waiting"){
@@ -257,7 +264,7 @@ function updateCounts() {
   const unread=groups.recent.filter(t=>displayStatus(t)==="unread").length;
   $("boardCount").textContent=groups.board.length;
   $("recentCount").textContent=groups.recent.length;
-  $("historyCount").textContent=groups.history.length;
+  $("frequentCount").textContent=(groups.frequent.length||frequencyReady())?String(groups.frequent.length):"—";
   const activity=window.WorkTwinBananaTree.activityState(unread,running,state.connected);
   const label=activity.label+(needsInput.length?" · "+needsInput.length+" 项需要你回复":"");
   $("petLauncher").dataset.state=activity.state;
@@ -433,6 +440,7 @@ function renderHealthScore(data,now=Date.now()/1000) {
   const confidence=valid?{provisional:"初步",short_check:"短测完成"}[score.confidence]||"初步":stale?"需重测":current||state.diagnosticsResetting?"采样中":"待同步";
   const tiers=healthConnectionTiers(),rounded=valid?Math.round(score.value):null;
   const tier=valid?tiers.find(item=>rounded>=item.min&&rounded<=item.max):null;
+  $("healthFace").dataset.expression=tier?tier.key:"unknown";
   $("healthScoreValue").textContent=valid?Math.round(score.value)+" /100":"—";
   $("healthBadgeValue").textContent=valid?String(Math.round(score.value)):"—";
   $("healthBadgeTier").textContent=tier?tier.label:stale?"重测":confidence==="待同步"?"同步中":confidence;
@@ -558,6 +566,25 @@ function activityTime(card) {
   const times=[seconds(card.updated_at),seconds(card.runtime_observed_at)].filter(t=>Number.isFinite(t)&&t>0);
   return times.length?Math.max(...times):0;
 }
+function usageFrequency(card,now=Date.now()/1000) {
+  const usage=card.usage_frequency;
+  if(usage?.source!=="codex_run"||usage.window_days!==7||usage.available!==true||
+    !Number.isSafeInteger(usage.run_count)||usage.run_count<0||
+    !Number.isSafeInteger(usage.weighted_score)||usage.weighted_score<usage.run_count||usage.weighted_score>usage.run_count*3||
+    !Number.isInteger(usage.active_days)||usage.active_days<0||usage.active_days>Math.min(7,usage.run_count)||
+    !Number.isFinite(usage.observed_at)||usage.observed_at<=0||usage.observed_at>now+30)return null;
+  const last=usage.last_run_at;
+  if(usage.run_count===0?last!==null:usage.active_days===0||!Number.isFinite(last)||last<=0||last>now+30||last>usage.observed_at+30||last<=now-7*86400)return null;
+  return {count:usage.run_count,score:usage.weighted_score,days:usage.active_days,last:last||0,complete:usage.complete===true,cached:now-usage.observed_at>30};
+}
+function frequencyReady(now=Date.now()/1000) {
+  return state.connected&&state.threads.every(t=>{const frequency=usageFrequency(t,now);return frequency&&frequency.complete&&!frequency.cached;});
+}
+function frequencyPriority(card) {
+  if(card.input_request?.pending===true)return 1;
+  if(card.status==="running"||(card.status==="unknown"&&card.last_observed_status==="running"&&card.sync_pending===true))return 2;
+  return card.unread?0:2;
+}
 function boardSets(now=Date.now()/1000) {
   const active=t=>t.input_request?.pending===true||t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true);
   const age=t=>activityTime(t)?Math.max(0,now-activityTime(t)):Infinity;
@@ -565,13 +592,17 @@ function boardSets(now=Date.now()/1000) {
   return {
     recent,
     board:recent.filter(t=>active(t)||t.unread),
-    history:state.threads.filter(t=>!active(t)&&age(t)>86400&&age(t)<=7*86400),
+    frequent:state.threads.filter(t=>(usageFrequency(t,now)?.count||0)>=2),
   };
 }
 function filtered() {
+  const now=Date.now()/1000;
   const rank=t=>t.input_request?.pending===true?(t.unread?0:1):t.status==="running"||(t.status==="unknown"&&t.last_observed_status==="running"&&t.sync_pending===true)?3:state.filter==="recent"&&!t.unread?2:0;
-  const sorted=(boardSets()[state.filter]||[]).sort((a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
-  return projectGroups(sorted).flatMap(group=>group.cards);
+  const sorted=(boardSets(now)[state.filter]||[]).sort(state.filter==="frequent"?(a,b)=>{
+    const left=usageFrequency(a,now),right=usageFrequency(b,now);
+    return frequencyPriority(a)-frequencyPriority(b)||right.score-left.score||right.days-left.days||right.count-left.count||right.last-left.last||activityTime(b)-activityTime(a)||String(a.id).localeCompare(String(b.id));
+  }:(a,b)=>rank(a)-rank(b)||activityTime(b)-activityTime(a));
+  return state.filter==="frequent"?sorted:projectGroups(sorted).flatMap(group=>group.cards);
 }
 function projectIdentity(card) {
   return String(card.cwd||card.project_label||"未关联项目");
@@ -618,15 +649,19 @@ function renderList(force=false) {
   }
   state.queuedRender=false;
   const rows=[];
-  for(const group of projectGroups(wantedCards)){
-    rows.push(projectHeading(group));
+  for(const group of state.filter==="frequent"?[{cards:wantedCards}]:projectGroups(wantedCards)){
+    if(group.key)rows.push(projectHeading(group));
     for(const t of group.cards){
       const b=existing.get(t.id)||node("button","task-button");b.type="button";
       if(!existing.has(t.id))b.addEventListener("click",()=>selectThread(t.id));
       updateTaskRow(b,t);rows.push(b);
     }
   }
-  if(!rows.length)rows.push(node("p","empty-note",state.filter==="board"?(state.connected?"当前待办已看完\n最近结果可在「近24小时」找回":"运行状态待同步"):state.filter==="history"?"24 小时至 7 天内暂无历史任务":"近 24 小时暂无任务"));
+  if(!rows.length){
+    const empty=state.filter==="board"?(state.connected?"暂无未查看结果或进行中任务\n最近结果可在「最近记录」找回":"运行状态待同步"):state.filter==="frequent"?
+      (frequencyReady()?"近7天独立运行满2次的对话收录到这里":"运行频次待同步"):"近24小时暂无记录";
+    rows.push(node("p","empty-note",empty));
+  }
   const scroll=$("taskList").scrollTop;
   $("taskList").replaceChildren(...rows);$("taskList").scrollTop=scroll;
   syncBoardSize();
@@ -682,7 +717,7 @@ function syncBoardSize(force=false,activate=true) {
   const health=$("runtimeHealth");
   const extra=bannerHeight+quotaHeight;
   const cards=filtered();
-  const height=Math.max(boardHeight(cards.length,extra,projectGroups(cards).length),health&&!health.hidden?300:0);
+  const height=Math.max(boardHeight(cards.length,extra,state.filter==="frequent"?0:projectGroups(cards).length),health&&!health.hidden?300:0);
   if(!force&&height===state.boardSize){positionHealthPopover();return;}
   state.boardSize=height;document.documentElement.style.setProperty("--board-height",height+"px");
   positionHealthPopover();

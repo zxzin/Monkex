@@ -10,6 +10,7 @@ from .task_view import describe
 from .runtime_observer import apply_runtime
 from .token_meter import aggregate_project_tokens
 from .input_requests import InputRequests, unknown_input
+from .usage_frequency import unknown_frequency
 
 
 SOURCES = ["cli", "vscode", "exec", "appServer", "unknown"]
@@ -29,6 +30,11 @@ class ActivityFeed:
         self.project_tokens.clear()
 
     def telemetry(self, card: dict[str, Any]) -> None:
+        card["usage_frequency"] = unknown_frequency()
+        frequency_snapshot = getattr(self.shell.runtime_observer, "frequency_snapshot", None)
+        frequency = frequency_snapshot(card["id"]) if callable(frequency_snapshot) else None
+        if isinstance(frequency, dict):
+            card["usage_frequency"].update({key: frequency[key] for key in card["usage_frequency"] if key in frequency})
         runtime = {"phase": "unknown", "activity_at": 0, "phase_at": 0, "pending_tools": 0,
                    "observation_available": False, "turn_id": None}
         if self.shell.runtime_observer:

@@ -24,22 +24,22 @@ When several Codex conversations are running, check which ones need attention wi
 | --- | --- |
 | Running | A growing green banana, a green card and a moving dashed rail. |
 | Completed, unread | A ripe yellow banana and a yellow card, ready to collect. |
-| Read | A banana peel and a quieter history row. |
+| Read | A banana peel and a quieter row in Recent. |
 
 ### The everyday gestures
 
 - **Hold the tree to move it; tap or hover to open the board.** It starts near the bottom-right corner. An unpinned board retracts when you leave it or switch windows; the pin keeps it open.
 - **Click a task to return to Codex.** Reading sync follows Codex's blue-dot state when compatible local records are available. Replies, approvals and execution happen in Codex.
 - **Collect a finished result.** The avatar records your local calendar-week harvest, Monday through Sunday. It survives restarts and counts each result once. Automatic read-state sync preserves that total.
-- **Floating bubbles bring replies within reach.** Structured async Codex questions appear in compact bubbles above the tree with the task name and pending count. Choose the reply arrow to open that conversation and hide its bubble, with stable ordering and pagination for multiple reminders. The same question stays hidden for this app session; new questions can notify again, while task cards retain their true pending state. Opening preserves unread results and harvest counts. External navigation targets the conversation; reopen a collapsed question panel using Codex's blue input indicator. See [input reminder support](docs/INPUT_REMINDERS.md).
-- **Use Board, 24 hours or 7 days** to find recent work. Project colors identify related conversations; green and yellow distinguish task states.
+- **Floating bubbles bring replies within reach.** Structured async Codex questions appear in compact bubbles above the tree with the task name and pending count. Choose the bubble or **View** to open that conversation and hide its bubble; a failed attempt shows **Retry**. Multiple reminders keep stable ordering and pagination. The same question stays hidden for this app session; new questions can notify again, while task cards retain their true pending state. Opening preserves unread results and harvest counts. External navigation targets the conversation; reopen a collapsed question panel using Codex's blue input indicator. See [input reminder support](docs/INPUT_REMINDERS.md).
+- **Use Unread, Frequent or Recent** to find work. Frequent sits in the middle and brings back conversations opened repeatedly through Monkex in the past seven days. Project colors identify related conversations in Unread and Recent; green and yellow distinguish task states.
 - **Right-click the tree to quit.** The running app stays out of the macOS Dock and Windows taskbar. Collection motion respects the system's reduced-motion setting.
 
 ## Related tasks, together
 
 <img src="docs/media/monkex-showcase-projects.en.jpg" width="960" alt="Two local project groups, Launch Studio and Monkex Lab, each with a consistent color marker and both running and completed conversations.">
 
-Conversations from the same local project stay together. Unread results take priority within each group. The small color marker identifies the project; green and yellow cards continue to identify task state.
+In Unread and Recent, conversations from the same local project stay together and unread results take priority within each group. Frequent uses one global list, ordered by task state and usage frequency without project sections. The small color marker identifies the project; green and yellow cards continue to identify task state.
 
 ## Quota, without a dashboard taking over
 
@@ -58,15 +58,27 @@ Dates use your computer's local time zone. Missing fields remain unknown; genuin
 
 Monkex displays the values Codex provides. It does not calculate remaining tokens, and one coin has no fixed token or monetary value. **Purchasing credits and redeeming reset cards stay in Codex.**
 
-## Finished work stays within reach
+## Keep familiar conversations within reach
 
-<img src="docs/media/monkex-showcase-history.en.jpg" width="960" alt="Side-by-side 24 hours and 7 days examples, with banana peels marking read results and older tasks still accessible.">
+The tabs appear in this order: **Unread | Frequent | Recent**, with Frequent in the middle.
 
-**24 hours** includes recent read results. **7 days** shows tasks whose last activity was more than 24 hours and no more than seven days ago. The two views use the same synthetic task set. Click a result to return to its original conversation.
+| Tab | Included work |
+| --- | --- |
+| Unread | All running tasks and pending replies, plus unread results from the past 24 hours. |
+| Frequent | Conversations with at least two distinct Codex runs in a rolling seven-day window. |
+| Recent | Tasks active in the past 24 hours, including read results. |
+
+**Frequent** puts completed unread results first, pending replies next, and other conversations after them. Within each tier, it sorts by weighted runs, active days, run count, latest run and most recent task activity, then uses the task identifier for stable ties. Runs in the latest 24 hours have weight 3, those 1–3 days old have weight 2, and those 3–7 days old have weight 1. Active days count occupied rolling 24-hour periods within the past seven days. This tab uses a global list while preserving each task's state and navigation behavior.
+
+Run counts come from structured run-start events in local Codex records, deduplicated by turn identifier. Tool calls, Token reports, steering messages and reconnects within the same turn share one run. Runs started directly in Codex also count; opening a conversation from Monkex only navigates to it. Only turn identifiers and timestamps are retained in memory. Counting creates no additional copy of conversation text and consumes no model Tokens.
+
+Local history is reconstructed at startup using a fixed read budget and restored after restarts. A pending history scan or a coverage gap displays “At least N runs”; unavailable sources remain pending sync. The former Monkex-open ledger is retired. When no conversations qualify, Frequent explains the two-run threshold. Unread and Recent keep separate empty states for no tasks to check and no records from the past 24 hours.
+
+The former 7 days tab is removed; original Codex conversations remain intact. Read-state sync, exact navigation and banana collection keep their existing behavior.
 
 ## Download and install
 
-Current source also includes **Codex Health**, a compact pixel heart left of the weekly quota. Its persistent Link reading shows public-connection quality out of 100; a separate dot flags waiting, quiet tasks, pending sync or a recent explicit error. Its anchored popover shows actual task evidence, connection samples and official notices; a high public score preserves task warnings. Reset the test after changing VPN nodes, or use the same flow on a direct connection. Cards show fresh reported Token usage or a phase such as Tool call / Awaiting response. Previously running cards stay visible as Pending sync during transient observation failures. [How monitoring works](docs/RUNTIME_HEALTH.md) · [Score formula](docs/HEALTH_SCORE.md)
+Current source also includes **Codex Health**, a compact unfilled line-art monkey left of the weekly quota. Its aligned face, numeric score and tier text show public-connection quality out of 100; a separate dot flags waiting, quiet tasks, pending sync or a recent explicit error. The five expressions follow the connection bands, with a neutral face and dash when the score is unknown. Its anchored popover shows actual task evidence, connection samples and official notices; a high public score preserves task warnings. Sampling and scoring rules remain unchanged. Reset the test after changing VPN nodes, or use the same flow on a direct connection. Cards show fresh reported Token usage or a phase such as Tool call / Awaiting response. Previously running cards stay visible as Pending sync during transient observation failures. [How monitoring works](docs/RUNTIME_HEALTH.md) · [Score formula](docs/HEALTH_SCORE.md)
 
 | | What you get |
 | --- | --- |

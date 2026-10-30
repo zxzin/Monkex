@@ -11,8 +11,51 @@ const tiers=[
   {min:60,max:69,key:'mixed',zh:'波动',en:'Mixed'},
   {min:0,max:59,key:'poor',zh:'不稳',en:'Poor'}
 ];
+const spritePath='/shell/assets/monkex-health-2026-10-30/clever-monkey-expressions.png';
+const facePositions={excellent:'6.4% 9.1%',smooth:'49.9% 9.1%',steady:'93.4% 9.2%',mixed:'6.4% 84.5%',poor:'49.9% 84.5%',unknown:'93.4% 84.4%'};
+const verifiedSpritePages=new WeakSet();
+async function verifySpritePixels(page){
+  if(verifiedSpritePages.has(page))return;
+  const sprite=await page.evaluate(async source=>{
+    const image=new Image();
+    await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(new Error('Monkey expression sprite failed to load'));image.src=source;});
+    const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+    const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0);
+    const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;
+    const width=canvas.width/3,height=canvas.height/2,frames=[];
+    for(let row=0;row<2;row++)for(let column=0;column<3;column++){
+      let black=0,white=0,opaque=0,hash=2166136261;
+      for(let y=row*height;y<(row+1)*height;y++)for(let x=column*width;x<(column+1)*width;x++){
+        const offset=(y*canvas.width+x)*4,luminance=Math.round(.2126*pixels[offset]+.7152*pixels[offset+1]+.0722*pixels[offset+2]);
+        if(luminance<16)black++;if(luminance>220)white++;if(pixels[offset+3]===255)opaque++;
+        hash=Math.imul(hash^luminance,16777619)>>>0;
+      }
+      frames.push({black,white,opaque,hash});
+    }
+    return {width:canvas.width,height:canvas.height,frames};
+  },spritePath);
+  assert.deepEqual([sprite.width,sprite.height],[1536,1024],'the approved image is a three-column, two-row square-cell sprite');
+  assert.equal(sprite.frames.length,6);
+  assert.ok(sprite.frames.every(frame=>frame.black>0&&frame.white>0&&frame.opaque===512*512),'every expression has real white line work and an opaque black background: '+JSON.stringify(sprite.frames));
+  assert.equal(new Set(sprite.frames.map(frame=>frame.hash)).size,6,'the six expression cells contain distinct luminance silhouettes');
+  verifiedSpritePages.add(page);
+}
 async function tierReading(page,value,lang,pending){
   const tier=value===null?null:tiers.find(item=>Math.round(value)>=item.min&&Math.round(value)<=item.max);
+  const expression=tier?tier.key:'unknown';
+  assert.equal(await page.locator('#healthFace').getAttribute('data-expression'),expression,'the face matches the visible rounded score');
+  const face=await page.locator('#healthFace').evaluate(element=>{
+    const style=getComputedStyle(element);return {tag:element.tagName,children:element.childElementCount,hidden:element.getAttribute('aria-hidden'),
+      image:style.maskImage,webkitImage:style.webkitMaskImage,size:style.maskSize,repeat:style.maskRepeat,mode:style.maskMode,
+      position:style.maskPosition.replace(/\b0px\b/g,'0%'),background:style.backgroundColor,color:style.color};
+  });
+  assert.equal(face.tag,'SPAN');assert.equal(face.children,0);assert.equal(face.hidden,'true');
+  assert.equal(await page.locator('#runtimeHealthToggle svg,#runtimeHealthToggle [data-face]').count(),0,'the selected image is rendered without an added outline SVG');
+  assert.ok(face.image.includes(spritePath)&&face.webkitImage.includes(spritePath),'the standard and WebKit masks use the approved image asset: '+JSON.stringify(face));
+  assert.equal(face.size,'360% 240%');assert.equal(face.repeat,'no-repeat');assert.equal(face.mode,'luminance');
+  assert.equal(face.position,facePositions[expression],'exactly the selected image cell fills the health face');
+  assert.equal(face.background,face.color,'the image luminance mask inherits the connection semantic color');
+  await verifySpritePixels(page);
   assert.equal(await page.locator('#healthBadgeTier').innerText(),tier?tier[lang]:pending);
   assert.equal(await page.locator('#healthTierRange').innerText(),tier?tier.min+'–'+tier.max+(lang==='en'?' points':' 分'):'');
   assert.deepEqual(await page.locator('#healthTierScale>li').evaluateAll(rows=>rows.map(row=>row.dataset.tier)),tiers.map(item=>item.key));
@@ -32,20 +75,20 @@ function feed(){const now=epoch();return {observed_at:now,health:{app_server:'on
   {id:'demo-c',name:'Publish notes',summary:'Release notes ready for review',project_label:'Demo project',status:'idle',unread:true,updated_at:now-500}
 ]};}
 async function geometry(page){
-  const g=await page.evaluate(()=>{const box=element=>{const r=(typeof element==='string'?document.getElementById(element):element).getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,width:r.width,height:r.height,bottom:r.bottom};};return {width:innerWidth,overflow:document.documentElement.scrollWidth,app:box('appShell'),health:box('runtimeHealth'),body:box('runtimeHealthBody'),list:box('taskList'),badge:box('runtimeHealthToggle'),heart:box(document.querySelector('.health-heart')),reading:box(document.querySelector('.health-reading')),number:box('healthBadgeValue'),numberFont:getComputedStyle(document.getElementById('healthBadgeValue')).fontSize,alert:box('healthRuntimeAlert'),caption:box(document.querySelector('.health-caption')),captionFont:getComputedStyle(document.querySelector('.health-caption')).fontSize,captionOverflow:document.getElementById('healthBadgeTier').scrollWidth,scale:box('healthTierScale'),scaleSteps:[...document.querySelectorAll('#healthTierScale>li')].map(row=>({...box(row),overflow:row.scrollWidth,label:row.textContent})),quota:box('weeklyQuota'),coin:box('quotaCoinButton'),pin:box('pinButton'),title:box('viewHeading'),anchor:Number.parseFloat(document.getElementById('runtimeHealth').style.getPropertyValue('--health-anchor-x'))};});
+  const g=await page.evaluate(()=>{const box=element=>{const r=(typeof element==='string'?document.getElementById(element):element).getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,width:r.width,height:r.height,bottom:r.bottom};};return {width:innerWidth,overflow:document.documentElement.scrollWidth,app:box('appShell'),health:box('runtimeHealth'),body:box('runtimeHealthBody'),list:box('taskList'),badge:box('runtimeHealthToggle'),face:box('healthFace'),reading:box(document.querySelector('.health-reading')),number:box('healthBadgeValue'),numberFont:getComputedStyle(document.getElementById('healthBadgeValue')).fontSize,alert:box('healthRuntimeAlert'),caption:box(document.querySelector('.health-caption')),captionFont:getComputedStyle(document.querySelector('.health-caption')).fontSize,captionOverflow:document.getElementById('healthBadgeTier').scrollWidth,scale:box('healthTierScale'),scaleSteps:[...document.querySelectorAll('#healthTierScale>li')].map(row=>({...box(row),overflow:row.scrollWidth,label:row.textContent})),quota:box('weeklyQuota'),coin:box('quotaCoinButton'),pin:box('pinButton'),title:box('viewHeading'),anchor:Number.parseFloat(document.getElementById('runtimeHealth').style.getPropertyValue('--health-anchor-x'))};});
   assert.ok(g.overflow<=g.width&&g.list.height>=40&&g.app.bottom<=421,JSON.stringify(g));
   const overlaps=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
   assert.ok(!overlaps(g.badge,g.coin)&&!overlaps(g.badge,g.pin)&&!overlaps(g.coin,g.pin),JSON.stringify(g));
   assert.ok(g.title.right<=g.badge.left&&g.badge.right<=g.quota.left&&g.title.width>=45,'brand, health and quota stay in order: '+JSON.stringify(g));
-  const narrow=g.width<=320,heartSize=narrow?16:18;
-  assert.ok(Math.abs(g.badge.width-(narrow?40:44))<=1&&Math.abs(g.badge.height-(narrow?30:32))<=1,'the selected badge keeps its compact footprint: '+JSON.stringify(g));
-  assert.ok(Math.abs(g.heart.width-heartSize)<=1&&Math.abs(g.heart.height-heartSize)<=1,'the pixel heart stays compact: '+JSON.stringify(g));
-  assert.ok(g.heart.right<=g.reading.left&&g.number.left>=g.badge.left&&g.number.right<=g.badge.right,'heart and number have distinct readable space: '+JSON.stringify(g));
-  assert.ok(Math.abs(g.heart.top+g.heart.height/2-g.reading.top-g.reading.height/2)<=1,'the heart and numeric reading align vertically: '+JSON.stringify(g));
+  const narrow=g.width<=320,faceSize=narrow?18:20;
+  assert.ok(Math.abs(g.badge.width-(narrow?42:44))<=1&&Math.abs(g.badge.height-(narrow?30:32))<=1,'the selected monkey badge leaves room for three score digits: '+JSON.stringify(g));
+  assert.ok(Math.abs(g.face.width-faceSize)<=1&&Math.abs(g.face.height-faceSize)<=1,'the selected image face stays compact: '+JSON.stringify(g));
+  assert.ok(g.face.right<=g.reading.left&&g.number.left>=g.badge.left&&g.number.right<=g.badge.right,'face and number have distinct readable space: '+JSON.stringify(g));
+  assert.ok(Math.abs(g.face.top+g.face.height/2-g.reading.top-g.reading.height/2)<=1,'the face and numeric reading align vertically: '+JSON.stringify(g));
   assert.equal(g.numberFont,'13px','the numeric reading uses the smaller selected type size, including 100');assert.equal(g.captionFont,'8px');
-  if(g.alert.width)assert.ok(!overlaps(g.alert,g.number)&&!overlaps(g.alert,g.heart),'the independent task marker stays clear of the score and heart: '+JSON.stringify(g));
+  if(g.alert.width)assert.ok(!overlaps(g.alert,g.number)&&!overlaps(g.alert,g.face),'the independent task marker stays clear of the score and face: '+JSON.stringify(g));
   assert.ok(g.caption.left>=g.badge.left&&g.caption.right<=g.badge.right&&g.caption.bottom<=g.badge.bottom&&g.captionOverflow<=Math.ceil(g.caption.width),'the connection tier fits its control');
-  assert.ok(!overlaps(g.caption,g.number)&&!overlaps(g.caption,g.heart),'the full-width tier label has its own row below the heart and number');
+  assert.ok(!overlaps(g.caption,g.number)&&!overlaps(g.caption,g.face),'the full-width tier label has its own row below the face and number');
   if(g.health.height){assert.ok(g.health.left>=0&&g.health.right<=g.width&&g.health.bottom<=g.app.bottom,JSON.stringify(g));assert.ok(Math.abs(g.health.top-g.badge.bottom-10)<=2,'popover starts below its badge');assert.ok(Math.abs(g.health.left+g.anchor-(g.badge.left+g.badge.width/2))<=2,'arrow points to the badge');assert.ok(g.scale.left>=g.body.left&&g.scale.right<=g.body.right,'the five-band scale stays within the disclosure');assert.ok(g.scaleSteps.every(row=>row.left>=g.scale.left&&row.right<=g.scale.right&&row.overflow<=Math.ceil(row.width)),'all translated scale labels and score ranges fit their cells: '+JSON.stringify(g.scaleSteps));}
   return g;
 }
@@ -83,7 +126,7 @@ async function exitMetadataCleared(page){
     assert.equal(await page.locator('#runtimeHealthToggle').getAttribute('data-level'),'notice');assert.equal(await page.locator('#healthRuntimeAlert').isVisible(),true);assert.equal(await page.locator('#healthRuntimeAlert').getAttribute('data-level'),'notice');
     assert.equal(await page.locator('#runtimeHealthToggle').getAttribute('data-score-level'),'ok');assert.equal(await page.locator('#healthBadgeValue').innerText(),'86');
     await tierReading(page,86,lang);assert.equal(await page.locator('#runtimeHealthToggle #healthBadgeValue').count(),1);assert.equal(await page.locator('#runtimeHealth #healthScoreValue').count(),1);
-    assert.equal(await page.locator('.health-ring,#healthStatusSymbol').count(),0);
+    assert.equal(await page.locator('.health-heart,.health-ring,#healthStatusSymbol').count(),0);
     layouts.push({lang,width,state:'collapsed',...await geometry(page)});
     await page.screenshot({path:path.join(out,`${lang}-${width}-collapsed.png`)});
     await page.locator('#runtimeHealthToggle').click();
@@ -135,6 +178,10 @@ async function exitMetadataCleared(page){
       assert.equal(await page.locator('#runtimeHealthToggle').getAttribute('data-level'),'notice','network quality and sampling state do not override quiet tasks');assert.equal(await page.locator('#healthRuntimeAlert').isVisible(),true);assert.equal(await page.locator('#healthRuntimeAlert').getAttribute('data-level'),'notice');
       assert.ok((await page.locator('#runtimeHealthToggle').getAttribute('aria-label')).includes(expected));await geometry(page);
       if(value===100)await page.screenshot({path:path.join(out,`${lang}-${width}-score-100.png`)});
+      if([0,60,70,85,95,null].includes(value)||grade==='stale'){
+        const expression=await page.locator('#healthFace').getAttribute('data-expression');
+        await page.locator('header').screenshot({path:path.join(out,`${lang}-${width}-face-${expression}-${grade}.png`)});
+      }
     }
     server.data=diagnostics();server.hold=true;
     await page.locator('#healthCheckButton').click();await page.waitForFunction(()=>document.getElementById('healthBadgeValue').textContent==='—');
@@ -196,6 +243,6 @@ async function exitMetadataCleared(page){
     await context.close();
   }
   assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'qa.json'),JSON.stringify({passed:true,errors,layouts},null,2));
-  console.log('PASS: bilingual 300/344 px observed-exit row, freshness and invalid-code safety; initially visible public score, five-band captions, rounded boundaries, 13 px numbers, independent runtime/official warnings, recovery and no task writes.');
+  console.log('PASS: bilingual 300/344 px approved luminance-mask sprite, six measured expression positions, unknown/recovery states, observed-exit row and freshness; five-band captions, rounded boundaries, 13 px numbers, independent runtime/official warnings and no task writes.');
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

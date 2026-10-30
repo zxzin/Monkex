@@ -1,9 +1,9 @@
 # 输入提醒 / Input reminders
 
-Codex 发出需要选择或填写的结构化异步问题时，Monkex 在对应任务卡旁显示「需要你回复」提示，并在树或看板正上方使用独立悬浮气泡显示任务名与待答问题数。气泡使用浅叶绿圆润轮廓、深绿文字、连续小尾巴与香蕉黄圆形回复箭头，整条气泡均可点击；小尾巴指向树，靠近屏幕顶部时自动放到下方，屏幕边缘会限制浮窗位置。树的悬停和拖拽继续保持原有行为。
+Codex 发出需要选择或填写的结构化异步问题时，Monkex 在对应任务卡旁显示「需要你回复」提示，并在树或看板正上方使用独立悬浮气泡显示任务名与待答问题数。气泡使用浅叶绿圆润轮廓、深绿文字、连续小尾巴与香蕉黄「查看」文字按钮，整条气泡均可点击；小尾巴指向树，靠近屏幕顶部时自动放到下方，屏幕边缘会限制浮窗位置。树的悬停和拖拽继续保持原有行为。
 
-- 点击气泡或右侧箭头直接回到 Codex 原对话回答，无需先展开看板。打开前重新核对同一回合的待答问题；已回答或已换回合的旧目标停止跳转。Monkex 保持只读观察，不提供代答、审批或自动继续操作；这次跳转保留未读结果和收蕉数。
-- 气泡出现时轻弹一次，日常刷新保持静止；悬停时颜色与箭头轻微反馈，整条点击区域保持位置与尺寸。系统开启“减少动态”时关闭这些动效。
+- 点击气泡或右侧「查看」直接回到 Codex 原对话回答，无需先展开看板。打开失败时按钮显示「重试」。打开前重新核对同一回合的待答问题；已回答或已换回合的旧目标停止跳转。Monkex 保持只读观察，不提供代答、审批或自动继续操作；这次跳转保留未读结果和收蕉数。
+- 气泡出现时轻弹一次，日常刷新保持静止；悬停时颜色轻微反馈，整条点击区域保持位置与尺寸。系统开启“减少动态”时关闭这些动效。
 - 气泡宽度随当前可见任务的标题和状态文字调整，范围为 152–196px；短标题收紧中间留白，长标题保持最大展示空间。翻页后按当前页重新计算，普通刷新保持相同宽度。
 - 每页最多三条紧凑提醒，新增任务稳定追加；多个问题合并到同一任务气泡，避免刷新时跳位。成功打开对话后自动收起这一条悬浮气泡；当前运行期间，同一回合、同一道问题的重复快照保持收起。待答目标变更、待答数量增加或新回合出现时再次提醒。跳转失败保留气泡供重试，断线或过期时暂时禁用跳转。
 - 收起气泡只记录本机进程内的导航状态，最多保留 256 个问题标识，不写入账号或磁盘。任务卡仍显示真实待回复状态，直到收到匹配回答；重新启动 Monkex 会重新观察尚未回答的问题。
@@ -21,11 +21,11 @@ Codex 发出需要选择或填写的结构化异步问题时，Monkex 在对应�
 
 ## English
 
-A **Needs reply** label identifies a task with a structured async Codex question. An independent floating window above the tree or board shows each task title and pending-question count, with up to three bubbles per page and stable ordering. Its continuous tail points toward the tree; near the screen top it falls back below, with position clamped to the screen edges. A rounded leaf-green surface, deep-green text and circular banana-yellow reply arrow follow the existing product palette. Each newly visible bubble enters once; routine polling stays still. Hover feedback preserves the full-row click area, and reduced-motion preferences disable animation. Tree hover and dragging keep their original behavior.
+A **Needs reply** label identifies a task with a structured async Codex question. An independent floating window above the tree or board shows each task title and pending-question count, with up to three bubbles per page and stable ordering. Its continuous tail points toward the tree; near the screen top it falls back below, with position clamped to the screen edges. A rounded leaf-green surface, deep-green text and compact banana-yellow **View** action follow the existing product palette. Each newly visible bubble enters once; routine polling stays still. Hover feedback preserves the full-row click area, and reduced-motion preferences disable animation. Tree hover and dragging keep their original behavior.
 
-Window width follows the visible page's title and status text within 152–196px. Short labels keep the arrow close; long labels retain the maximum space. Page changes recalculate width, while unchanged polling keeps it stable.
+Window width follows the visible page's title and status text within 152–196px. Short labels keep the action close; long labels retain the maximum space. Page changes recalculate width, while unchanged polling keeps it stable.
 
-Choose **Reply** to open the original conversation without expanding the board. Fresh turn and question identities are verified before navigation; obsolete targets stop the jump. Successful navigation hides that floating bubble. Repeated snapshots of the same turn and question stay hidden during this app session. A changed pending target, increased pending count or new turn makes the reminder visible again. Navigation failures retain the bubble for retry, while stale observations disable navigation. Reminder navigation preserves unread results and harvest counts; Monkex never answers, approves or resumes work on your behalf.
+Choose the bubble or **View** to open the original conversation without expanding the board. Fresh turn and question identities are verified before navigation; obsolete targets stop the jump. Successful navigation hides that floating bubble. Repeated snapshots of the same turn and question stay hidden during this app session. A changed pending target, increased pending count or new turn makes the reminder visible again. Navigation failures retain the bubble and show **Retry**, while stale observations disable navigation. Reminder navigation preserves unread results and harvest counts; Monkex never answers, approves or resumes work on your behalf.
 
 Dismissal keeps up to 256 question identifiers in process memory and writes no account or disk state. The task card keeps its true pending status until a matching structured reply arrives. Restarting Monkex observes unanswered questions again. Tool acceptance means the question was sent; partial replies leave other questions pending, including while an asynchronous turn continues working.
 

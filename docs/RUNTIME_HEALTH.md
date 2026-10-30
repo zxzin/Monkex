@@ -1,6 +1,6 @@
 # 运行健康 / Runtime Health
 
-展开任务看板，点击周额度左侧的像素爱心。爱心旁的 13px 数字常驻显示「公共连接质量」0–100 分，下方显示「极佳 / 流畅 / 平稳 / 波动 / 不稳」文字档位；独立小圆点表示任务等待、静默、待同步或明确错误。详情从爱心下方弹出，箭头指向入口，展示当前档位含义与完整分数刻度。任务状态依据实际运行记录，公共接口高分仍保留静默、失联和错误提醒。数值只描述指定公开路径的响应质量；采样不足或过期显示「—」。点击外部、关闭按钮或按 Esc 收起。详细档位、权重、阈值和限制见[评分公式](HEALTH_SCORE.md)。此功能属于当前源码，公开安装包的可用功能以对应 Release 为准。
+展开任务看板，点击周额度左侧的线条表情。表情旁的 13px 数字常驻显示「公共连接质量」0–100 分，下方显示「极佳 / 流畅 / 平稳 / 波动 / 不稳」文字档位；独立小圆点表示任务等待、静默、待同步或明确错误。详情从表情下方弹出，箭头指向入口，展示当前档位含义与完整分数刻度。任务状态依据实际运行记录，公共接口高分仍保留静默、失联和错误提醒。数值只描述指定公开路径的响应质量；采样不足或过期显示「—」。点击外部、关闭按钮或按 Esc 收起。详细档位、权重、阈值和限制见[评分公式](HEALTH_SCORE.md)。表情随连接档位依次为大笑、笑脸、微笑、担忧、哭脸；未知或重测显示中性待机脸，分数、文字和独立任务提醒保持。此功能属于当前源码，公开安装包的可用功能以对应 Release 为准。
 
 ## 看什么
 
@@ -49,7 +49,7 @@
 
 ## English
 
-Click the pixel heart left of weekly quota to open **Codex Health**. Its 13px reading keeps the public-connection score out of 100 visible, paired with Prime (95–100), Smooth (85–94), Steady (70–84), Mixed (60–69) or Poor (0–59). The popover explains the current band and highlights it on the full score scale. Missing or stale samples display a dash with a sampling, sync or retest label. These are interpretation bands for the existing connection score; the scoring formula remains unchanged. A separate dot preserves runtime warnings for waiting or quiet tasks, unknown observations and recent explicit turn failures. The popover is anchored below the heart and shows task evidence, connection samples, public HTTPS checks and official notices; click outside, use the close button, or press Esc to dismiss it. See [the score formula](HEALTH_SCORE.md). Public responses establish reachability of the sampled endpoints; authenticated sessions and model generation need their own evidence.
+Click the outline face left of weekly quota to open **Codex Health**. Its 13px reading keeps the public-connection score out of 100 visible, paired with Prime (95–100), Smooth (85–94), Steady (70–84), Mixed (60–69) or Poor (0–59). The popover explains the current band and highlights it on the full score scale. Missing or stale samples display a dash with a sampling, sync or retest label. These are interpretation bands for the existing connection score; the scoring formula remains unchanged. A separate dot preserves runtime warnings for waiting or quiet tasks, unknown observations and recent explicit turn failures. The popover is anchored below the face and shows task evidence, connection samples, public HTTPS checks and official notices; click outside, use the close button, or press Esc to dismiss it. See [the score formula](HEALTH_SCORE.md). Public responses establish reachability of the sampled endpoints; authenticated sessions and model generation need their own evidence.
 
 Reported usage uses a rolling 60-second window. Total usage includes input/cache; output includes reasoning. Zero means no new usage report in that window; a dash means insufficient measurements. Neither is model decoding TPS. A task quiet for three minutes deserves a look, and may still be thinking or waiting for a tool.
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — 2026-10-30
+
+- Reorganize navigation as Unread, Frequent and Recent, with Frequent in the middle. Unread includes running tasks, pending replies and unread results from the past 24 hours; Recent includes tasks active in the past 24 hours, including read results.
+- Replace the 7 days history view with Frequent, using distinct Codex runs in a rolling seven-day window with a two-run threshold. Deduplicate structured run-start events by turn ID, including runs started directly in Codex. Conversation navigation remains independent of frequency; tools, Token reports, steering and reconnects within a turn share one run.
+- Use one global Frequent list without project sections. Rank completed unread results before pending replies and other conversations, then sort within each tier by weighted runs, active days, run count, latest run, recent activity and stable task identifier. Apply weights of 3 for runs in the latest 24 hours, 2 for 1–3 days and 1 for 3–7 days. Active days use rolling 24-hour periods. Preserve project grouping in Unread and Recent.
+- Reconstruct seven-day frequency from local history with bounded incremental reads, including after restarts. Keep only IDs and timestamps in memory; retire the former open ledger. Partial coverage displays an observed lower bound and unavailable sources remain unknown. Preserve read-state synchronization, exact conversation navigation and banana collection; original Codex records remain intact.
+- Refine the selected monkey health indicator with unfilled head, ear and mask lines, five score-band expressions and a neutral unknown face. Align the face, numeric score and tier text, keeping task alerts independent and preserving the score formula, sampling and health-detail controls.
+- Replace the floating reminder's arrow action with a compact View label and an explicit Retry state. Preserve whole-bubble navigation, automatic dismissal, pending-request state and the tree-facing tail.
+
+## Unreleased — 2026-10-29
+
+- Replace the health heart with compact unfilled line expressions for the five connection bands: a grin, smile, gentle smile, worried face and crying face. Unknown, stale or resetting readings use a neutral standby face. Preserve the numeric score, tier text, independent task alert, popover controls, sampling and scoring rules in both languages.
+
 ## Unreleased — 2026-10-28
 
 - Dispatch reminder interaction, pagination and dismissal off the UI thread. Preserve window serialization while allowing native getters to complete during concurrent refreshes.

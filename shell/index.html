@@ -27,7 +27,7 @@
     <header class="topbar">
       <div id="greetMonkey" class="brand-pet" title="本周收蕉"><span id="brandMonkey" class="monkey-art" data-frame="idle" aria-hidden="true"><img src="/shell/assets/monkey-banana-2026-09-07/gold-chain-monkey.png" alt=""></span></div>
       <div class="heading" id="dragArea"><h1><span id="viewHeading" title="Monkex · Codex 进度看板">Monkex</span><i id="connectionDot" class="connection-dot" title="正在连接" aria-label="正在连接"></i></h1><span id="connectionText" class="sr-only">正在连接 Codex</span></div>
-      <button id="runtimeHealthToggle" class="health-badge" type="button" aria-expanded="false" aria-controls="runtimeHealth" aria-label="公共连接质量 · — · Codex 健康度 · 待确认" title="公共连接质量 · — · Codex 健康度 · 待确认" data-level="unknown" data-score-level="unknown"><svg class="health-heart" viewBox="0 0 12 11" aria-hidden="true"><path d="M1 1h3v1h1v1h2V2h1V1h3v1h1v4h-1v1h-1v1H9v1H8v1H7v1H5v-1H4V9H3V8H2V7H1V6H0V2h1z"/></svg><span class="health-reading"><strong id="healthBadgeValue">—</strong></span><span id="healthBadgeTier" class="health-caption">同步中</span><i id="healthRuntimeAlert" class="health-runtime-alert" data-level="unknown" aria-hidden="true"></i></button>
+      <button id="runtimeHealthToggle" class="health-badge" type="button" aria-expanded="false" aria-controls="runtimeHealth" aria-label="公共连接质量 · — · Codex 健康度 · 待确认" title="公共连接质量 · — · Codex 健康度 · 待确认" data-level="unknown" data-score-level="unknown"><span id="healthFace" class="health-face" data-expression="unknown" aria-hidden="true"></span><span class="health-reading"><strong id="healthBadgeValue">—</strong></span><span id="healthBadgeTier" class="health-caption">同步中</span><i id="healthRuntimeAlert" class="health-runtime-alert" data-level="unknown" aria-hidden="true"></i></button>
       <span id="weeklyQuota" class="weekly-quota" title="周订阅额度待同步"><button id="quotaResetToggle" class="quota-reset-toggle" type="button" aria-expanded="false" aria-controls="quotaResetWindows" title="展开额度重置时间"><span>周剩余</span><strong id="weeklyRemaining">—</strong></button><button id="quotaCoinButton" class="quota-coin-button" type="button" aria-label="刷新任务与额度" title="点击刷新任务与额度"><img class="quota-coin" src="/shell/assets/monkex-coins-2026-09-07/banana-coin-v1.png" alt="" aria-hidden="true"></button></span>
       <button id="pinButton" class="pin-button" type="button" aria-pressed="false" aria-label="钉住看板" title="钉住看板"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="pin-shadow" d="M5 21h14" /><g class="pin-art"><path class="pin-needle" d="M12 14v7"/><path class="pin-head" d="M8 3h8v3l-1 1v4l3 3v2H6v-2l3-3V7L8 6z"/><path class="pin-glint" d="M10 5h3"/></g></svg></button>
       <button id="collapseButton" class="icon-button" type="button" aria-label="收成香蕉树" title="收成香蕉树"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg></button>
@@ -77,9 +77,9 @@
     </section>
     <section id="feedView" class="feed-view" aria-label="跨项目任务动态">
       <nav class="filters" aria-label="任务筛选">
-        <button data-filter="board" class="filter active" aria-pressed="true" title="近24小时未读在前，全部进行中在后">看板 <span id="boardCount">0</span></button>
-        <button data-filter="recent" class="filter" aria-pressed="false" title="近24小时未读在前、已读其次、进行中在后；组内按最近活动排序">近24小时 <span id="recentCount">0</span></button>
-        <button data-filter="history" class="filter" aria-pressed="false" title="最后活动在24小时前、7天以内的任务">历史7天 <span id="historyCount">0</span></button>
+        <button data-filter="board" class="filter active" aria-pressed="true" title="近24小时未查看结果，以及进行中和待回复任务；项目内优先展示未查看结果">未查看 <span id="boardCount">0</span></button>
+        <button data-filter="frequent" class="filter" aria-pressed="false" title="近7天独立运行至少2次；未查看结果、待回复优先，其余按加权运行频次、活跃天数与最近运行排序">常用对话 <span id="frequentCount">0</span></button>
+        <button data-filter="recent" class="filter" aria-pressed="false" title="近24小时活动记录及全部进行中、待回复任务；项目内未读、已读、进行中依次排列">最近记录 <span id="recentCount">0</span></button>
       </nav>
       <div id="taskList" class="task-list" aria-label="任务列表"><p class="empty-note">正在读取最近任务…</p></div>
       <span id="syncLabel" class="sr-only" aria-live="off"></span>

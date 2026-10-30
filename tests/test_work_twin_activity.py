@@ -450,6 +450,32 @@ class ActivityTests(unittest.TestCase):
         self.shell.feed.telemetry(card)
         self.assertEqual(card["runtime"]["phase"], "unknown", "two unknown turn IDs do not establish a match")
 
+    def test_run_frequency_uses_observer_history_without_six_turn_limit(self):
+        observer = mock.Mock()
+        observer.error = False
+        observer.token_snapshot.return_value = {"ready": False}
+        observer.snapshot.return_value = {"revision": "stable"}
+        observer.frequency_snapshot.return_value = {"source": "codex_run", "run_count": 18,
+            "available": True, "complete": True, "raw_messages": "PRIVATE_MESSAGES"}
+        self.shell.runtime_observer = observer
+        card = self.shell.feed.collect()["threads"][0]
+        self.assertEqual(card["usage_frequency"]["run_count"], 18)
+        self.assertEqual(card["usage_frequency"]["source"], "codex_run")
+        self.assertNotIn("user_turns", card["usage_frequency"])
+        self.assertNotIn("PRIVATE_MESSAGES", repr(card))
+        observer.frequency_snapshot.assert_called()
+        self.assertTrue(all(params["limit"] == 6 for method, params in self.client.calls
+                            if method == "thread/turns/list"))
+        with mock.patch("twin_shell.orchestrator.open_codex_thread"):
+            self.shell.open_thread("thread-0")
+        refreshed = self.shell.feed.detail("thread-0")["card"]
+        self.assertEqual(refreshed["usage_frequency"]["run_count"], 18)
+
+    def test_run_frequency_requires_actual_runtime_evidence(self):
+        card = self.shell.feed.collect()["threads"][0]
+        self.assertIsNone(card["usage_frequency"]["run_count"])
+        self.assertFalse(card["usage_frequency"]["available"])
+
     def test_running_task_omitted_from_list_is_verified_by_exact_read(self):
         observer = mock.Mock()
         observer.error = False

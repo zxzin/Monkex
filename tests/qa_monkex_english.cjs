@@ -47,7 +47,7 @@ fs.mkdirSync(out,{recursive:true});
  await page.locator('#petShell').screenshot({path:path.join(out,'english-tree.png')});
  await page.locator('#petLauncher').click();await page.locator('#appShell').waitFor({state:'visible'});
  await page.locator('#pinButton').click();assert.equal(await page.locator('#pinButton').getAttribute('aria-pressed'),'true');
- await page.goto('http://monkex.test/shell/index.html?lang=zh');await page.locator('[data-filter=board]').getByText('看板').waitFor();
+ await page.goto('http://monkex.test/shell/index.html?lang=zh');await page.locator('[data-filter=board]').getByText('未查看').waitFor();
  assert.equal(await page.locator('html').getAttribute('lang'),'zh-CN');
  assert.deepEqual(errors,[]);
  fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({status:'passed',checks:['auto English','Chinese override','English quota and status','coin refresh','no overlap at 344px','original task text preserved','English tree tap','pin'],errors},null,2));

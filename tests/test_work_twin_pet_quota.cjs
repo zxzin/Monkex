@@ -8,7 +8,7 @@ const now=Date.now()/1000;
 const state={threads:[],connected:true,weeklyUsage:{available:true,remaining_percent:68,observed_at:now,resets_at:now+3600}};
 let unread=2,running=1;
 const ctx={state,$,Date,document:{hidden:false},window:{matchMedia:()=>({matches:false}),WorkTwinBananaTree:require('../shell/banana-tree.js')},
-  displayStatus:t=>t.unread?'unread':'running',boardSets:()=>({board:[...Array.from({length:unread},()=>({unread:true})),...Array.from({length:running},()=>({status:'running'}))],recent:Array.from({length:unread},()=>({unread:true})),history:[]})};
+  displayStatus:t=>t.unread?'unread':'running',frequencyReady:()=>true,boardSets:()=>({board:[...Array.from({length:unread},()=>({unread:true})),...Array.from({length:running},()=>({status:'running'}))],recent:Array.from({length:unread},()=>({unread:true})),frequent:[]})};
 vm.createContext(ctx);
 vm.runInContext(source.slice(source.indexOf('function inputRequestState('),source.indexOf('function displayStatus(')),ctx);
 vm.runInContext(source.slice(source.indexOf('function updateCounts('),source.indexOf('function activityTime(')),ctx);
